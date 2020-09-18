@@ -1,0 +1,144 @@
+---
+title: "Filter metadata"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+---
+
+
+# Introduction
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+scale_fill_discrete <- function(...) {
+  scale_fill_manual(..., values = cbp1)
+}
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbp1)
+}
+
+# count function
+Count <- function(x){return(plyr::count(x))}
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(finalfit)
+library(janitor)
+library(ICC)
+library(vcd)
+library(DataExplorer)
+library(MatchIt)
+```
+
+## Import data
+```{r}
+d.out <- "/home/lsilva/IKMB/projects/skin.associations/results/popgen/1.full.set/1.filter.samples.and.metadata"
+d.in <- d.out
+d.out <- "/home/lsilva/IKMB/projects/skin.associations/results/popgen/1.full.set/1.filter.samples.and.metadata"
+meta <- "meta.rds" %>%
+  paste0(d.out, "/", .) %>%
+  readRDS()
+micro <- "micro.rds" %>%
+  paste0(d.out, "/", .) %>%
+  readRDS()
+tax <- "tax.rds" %>%
+  paste0(d.out, "/", .) %>%
+  readRDS()
+meta.dic <- "dic.rds" %>%
+  paste0(d.out, "/", .) %>%
+  readRDS()
+```
+
+# Remove participants with no information about samples or chronic sites
+
+```{r}
+meta <- meta %>% 
+  filter(!is.na(wash), !is.na(cream)) %>% 
+  filter(Site != "Chronic lesion") %>% 
+  droplevels()
+micro <- micro %>% 
+  rownames_to_column("NGS_ID") %>% 
+  right_join(meta %>% select(NGS_ID), by = "NGS_ID") %>% 
+  column_to_rownames("NGS_ID")
+micro <- micro[,colnames(micro)>0]
+tax <- tax %>% 
+  right_join(micro %>% colnames() %>% data.frame(ASV = .), by = "ASV")
+
+identical(meta$NGS_ID, rownames(micro))
+identical(micro%>% colnames, tax$ASV)
+```
+
+
+```{r}
+"pheno.all.gold.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(meta, .)
+"micro.all.gold.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(micro, .)
+"tax.all.gold.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(tax, .)
+"pheno.dic.all.gold.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(meta.dic, .)
+```
+
+# Session information
+
+```{r}
+sessionInfo()
+```
+

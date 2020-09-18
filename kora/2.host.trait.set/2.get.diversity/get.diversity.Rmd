@@ -1,0 +1,256 @@
+---
+title: "Get diversity measures"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+  index: "1"
+---
+
+
+# Introduction
+
+Here, I will retrieve filter the asv table and get rarefied microbiome table, and dissimilarity matrix. Dissimilarity matrix will be calculated from rarefied data.
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 5,
+               fig.width = 4 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+
+# Set output directory
+d.out <- params$d.out
+index <- params$index
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(vegan)
+```
+
+```{r}
+if(index == "1"){site <- "Antecubital fossa"}
+if(index == "2"){site <- "Behind ear"}
+```
+
+
+
+## Import data
+```{r}
+d.in <- "/home/lsilva/IKMB/projects/skin.associations/results/kora/2.host.trait.set/1.filter.samples.and.metadata"
+micro <- "micro.all.gold.rds" %>%
+  paste0(d.in, "/", .) %>% 
+  readRDS()
+
+pheno <- "pheno.all.gold.rds" %>%
+  paste0(d.in, "/", .) %>% 
+  readRDS()
+
+pheno.dic <- "pheno.dic.all.gold.rds" %>%
+  paste0(d.in, "/", .) %>% 
+  readRDS()
+
+tax <- "tax.all.gold.rds" %>%
+  paste0(d.in, "/", .) %>% 
+  readRDS()
+
+```
+
+## Sync index
+
+```{r}
+
+
+pheno <- pheno %>% 
+  filter(Site == site) %>% 
+  select(-Site) 
+
+
+
+micro <- micro %>% 
+  rownames_to_column("NGS_ID") %>% 
+  right_join(pheno %>% select(NGS_ID), by = "NGS_ID") %>% 
+  column_to_rownames("NGS_ID")
+
+micro <- micro[,colSums(micro)>0]
+tax <- tax %>% 
+  right_join(micro %>%
+               colnames() %>%
+               data.frame( ASV = .), by = "ASV")
+```
+
+
+# Filter
+
+## Set funtion to filter data
+
+```{r}
+select.asv <- function(cut.off.core, pc.cutoff, micro.st){
+  
+  micro.1 <- micro.st
+  
+  #Set cutoff core
+  min.participants <- nrow(micro.1) * cut.off.core
+  print(min.participants)
+  # Get ASVs that pass the core cutoff
+  core <- micro.1 > 0
+  core <- core %>% colSums()
+  core <- core[core > min.participants]
+  core <- names(core)
+  # Set cutoff abundance
+  abun <- colSums(micro.1)
+  total.seqs <- sum(abun)
+  min.abun <- (pc.cutoff * total.seqs) / 100
+  print(min.abun)
+  # Get ASVs that pass abundance cutoff
+  abun <- colSums(micro.1)
+  abun <- abun[abun > min.abun]
+  abun <- names(abun)
+  # Combine the results
+  asv.to.keep.1 <- intersect(core, abun) %>% unique()
+  
+  d <- data.frame(ASV = asv.to.keep.1, stringsAsFactors = F) 
+  return(d)}
+```
+
+## Set cut-off and filter
+```{r}
+
+cut.off.core <- 0 #proportion
+# Abundance
+pc.cutoff <- 0.1 #percentage
+
+# rarefy for filter
+min.count <- 5000
+micro.r <- rrarefy(micro, min.count) %>% 
+  data.frame()
+micro.r <-  micro.r[, colSums(micro.r) > 0]
+asvs <- select.asv(cut.off.core, pc.cutoff, micro.r) %>% 
+  mutate(status = "Bona fidi")
+
+micro.filtered <- micro[, colnames(micro) %in% asvs$ASV]
+micro.filtered <- micro.filtered[rowSums(micro.filtered) > 5000, ]
+
+# Gather stats
+
+stats <- data.frame(Stage = "Before",
+                    seqs = micro %>% colSums() %>% sum(),
+                    samples = nrow(micro))
+stats <- bind_rows(stats, 
+                   data.frame(Stage = "After",
+                    seqs = micro.filtered %>% colSums() %>% sum(),
+                    samples = nrow(micro.filtered)))
+
+paste0("i", index, ".", "stats.filtering.tsv") %>%
+  paste0(d.out, "/", .) %>% 
+  write_tsv(stats, .)
+# Rename
+micro <- micro.filtered
+
+# remove temporary files
+rm(micro.r, micro.filtered)
+```
+
+# Sync Files
+
+```{r}
+tax <- tax %>%
+  right_join(data.frame(ASV = colnames(micro)), by  ="ASV")
+
+pheno <- pheno %>%
+  right_join(data.frame(NGS_ID = rownames(micro)), by  = "NGS_ID")
+```
+
+
+# Rarefy data
+
+```{r}
+min.count <- 5000
+micro.r <- rrarefy(micro, min.count) %>% 
+  data.frame()
+micro.r <-  micro.r[, colSums(micro.r) > 0]
+```
+
+# Get distances
+
+```{r}
+micro.dis <- micro.r %>%
+  vegdist("bray")
+```
+
+
+# Saving output
+
+```{r}
+paste0("i", index, ".", "micro.rarefied.rds") %>% 
+  paste0(d.out, "/", .) %>% 
+  saveRDS(micro.r, .)
+
+paste0("i", index, ".","micro.dis.rds") %>% 
+  paste0(d.out, "/", .) %>% 
+  saveRDS(micro.dis, .)
+
+paste0("i", index, ".","pheno.rds") %>% 
+  paste0(d.out, "/", .) %>% 
+  saveRDS(pheno, .)
+
+paste0("i", index, ".", "micro.rds") %>% 
+  paste0(d.out, "/", .) %>% 
+  saveRDS(micro, .)
+
+paste0("i", index, ".", "pheno.dic.rds") %>% 
+  paste0(d.out, "/", .) %>% 
+  saveRDS(pheno.dic, .)
+
+paste0("i", index, ".", "tax.rds") %>% 
+  paste0(d.out, "/", .) %>% 
+  saveRDS(tax, .)
+
+```
+
+
+# Session information
+
+```{r}
+sessionInfo()
+```

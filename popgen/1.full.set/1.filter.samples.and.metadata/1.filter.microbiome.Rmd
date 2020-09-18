@@ -1,0 +1,158 @@
+---
+title: "Filter microbiome data"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+---
+
+
+# Introduction
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+scale_fill_discrete <- function(...) {
+   scale_fill_manual(..., values = cbp1)
+}
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbp1)
+}
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(DataExplorer)
+```
+
+## Import data
+```{r}
+d.out <- "/home/lsilva/IKMB/projects/skin.associations/results/popgen/1.full.set/1.filter.samples.and.metadata"
+dir.create(d.out, showWarnings = F)
+d.in <- "/home/lsilva/IKMB/projects/skin.associations/popgen/results/2.combine.metadata.microbiome/"
+meta <- "meta.rds" %>%
+  paste0(d.in, "/",. ) %>%
+  readRDS()
+micro <- "micro.rds" %>%
+  paste0(d.in, "/",. ) %>%
+  readRDS()
+tax <- "tax.rds" %>%
+  paste0(d.in, "/",. ) %>%
+  readRDS()
+meta.dic <- "meta.dic.rds" %>%
+  paste0(d.in, "/",. ) %>%
+  readRDS()
+```
+
+# Introduction
+
+I will filter the microbiome data to keep only samples with minimum sequencing depth of 10,000 sequences.
+
+# Set minimal sequencing depth for microbiome data
+
+## Microbiome table
+
+### Remove samples with low depth
+```{r}
+dim(micro)
+micro <- micro[rowSums(micro) > 10000,]
+dim(micro)
+```
+
+### Remove possibly empty ASVs
+
+```{r}
+micro <- micro[,colSums(micro) > 0]
+```
+
+## Update the other tables
+
+### Meta
+```{r}
+meta <- rownames(micro) %>%
+  data.frame(NGS_ID = ., stringsAsFactors = F) %>%
+  left_join(meta)
+```
+
+### Tax
+
+```{r}
+tax <- colnames(micro) %>%
+  data.frame(ASV = ., stringsAsFactors = F) %>%
+  left_join(tax)
+```
+
+
+
+```{r}
+"meta.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(meta, .)
+"micro.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(micro, .)
+"tax.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(tax, .)
+"dic.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(meta.dic, .)
+```
+
+
+# Session information
+
+```{r}
+sessionInfo()
+```

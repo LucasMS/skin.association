@@ -1,0 +1,269 @@
+---
+title: "Make plot of common results between kora and pop in antecubital fossa"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(reshape2)
+library(RColorBrewer)
+
+```
+
+
+## Import files
+```{r}
+microenv <- "~/IKMB/projects/skin.associations/scripts/data.dic/skin.microenv.tsv" %>% 
+  read_tsv()
+
+tax <- "~/IKMB/projects/skin.associations/results/analysis/1.combine.microbiome/1.join.microbiome/master.tax.rds" %>% 
+  readRDS()
+
+deseq <- "~/IKMB/projects/skin.associations/results/analysis/3.results.tables/asv.tsv" %>% 
+  read_tsv() %>% 
+  filter(Test.batch == "Age/BMI/Sex/Lifestyle") %>% 
+  filter(Site == "Antecubital fossa")
+``` 
+
+# Set variables
+```{r}
+sites <- deseq %>% 
+  select(Site, Cohort) %>% 
+  unique %>% 
+  mutate(names = abbreviate(paste0(Site,
+                                   ".",
+                                   str_sub(Cohort,1,1))) %>% make.names())
+
+weights <- deseq %>% 
+  select(rel.abundance, seqs, Site, Cohort) %>% 
+  unique()
+
+pal <- c("#E69F00", "#56B4E9", "#009E73",
+         "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")[c(3,4)]
+```
+
+# Process ASV
+
+```{r}
+res <- deseq
+```
+
+## Join results
+
+```{r}
+
+
+df <- res %>%
+  filter(Site == sites$Site[1], Cohort == sites$Cohort[1]) %>% 
+  select(seqs, Group, Description, log2FoldChange, lfcSE, stat, pvalue, padj) 
+
+colnames(df) <- c("seqs", "Group", "Description", sites$names[1], 
+                  paste0(sites$names[1], "_", "lfcSE"),
+                  paste0(sites$names[1], "_", "stat"), 
+                  paste0(sites$names[1], "_", "pvalue"),
+                  paste0(sites$names[1], "_", "padj"))
+
+
+for (i in 2:nrow(sites)){
+  df.temp <- res %>%
+    filter(Site == sites$Site[i], Cohort == sites$Cohort[i]) %>% 
+    select(seqs, Group, Description, log2FoldChange, lfcSE, stat, pvalue, padj) 
+  colnames(df.temp) <- c("seqs", "Group", "Description", sites$names[i], 
+                         paste0(sites$names[i], "_", "lfcSE"),
+                         paste0(sites$names[i], "_", "stat"), 
+                         paste0(sites$names[i], "_", "pvalue"),
+                         paste0(sites$names[i], "_", "padj"))
+  
+  
+  df <- full_join(df,
+                  df.temp,
+                  by = c("seqs", "Group", "Description"))
+  rm(df.temp)
+}
+
+```
+
+## Add taxonomy
+
+```{r}
+df <- df %>%
+  left_join(tax %>% select(seqs, everything()), by = "seqs") 
+```
+
+## Format
+
+
+```{r}
+to.plot <- df %>% 
+  select(sites$names, Phylum, Family, Genus, Species,seqs, ASV, Group, Description) %>% 
+  melt(id.vars = c("Phylum", "Genus", "Family", "Species","seqs", "ASV", "Group", "Description")) %>% 
+  mutate(value = value %>% as.numeric()) %>% 
+  rename("names" = "variable") %>% 
+  left_join(sites, by = "names") %>% 
+  left_join(microenv, by =  "Site") %>% 
+  filter((Site %in% sites$Site) & (!is.na(value))) %>% 
+  mutate(Species = if_else(str_detect(Species, "(unc.)"),
+                           Species,
+                           paste0(Genus," ",Species))) %>%
+  mutate(Species = gsub("\\(unc.\\)",  "", Species)) %>% 
+  left_join(weights, by = c("Site", "seqs", "Cohort")) %>% 
+  unique() %>% 
+  # Select only matching doubled
+  mutate(Site = paste0(Site, " (", str_sub(Cohort, 1, 1), ")")) %>% 
+  group_by(Description, seqs) %>% 
+  mutate(count = n()) %>% 
+  filter(count >1) %>% 
+  ungroup()
+#unique associations
+to.plot %>% select(Description, seqs) %>% unique() %>% nrow()
+
+```
+# Count direction of associations
+
+```{r}
+# count bidirectional
+
+to.plot %>% mutate(plus = if_else(value > 0,
+                                  1,
+                                  0)) %>% group_by(Description, ASV) %>% 
+  mutate(direction = sum(plus),
+         direction.character = if_else(direction == 2 | direction == 0,
+                                         "same",
+                                       "opposite")) %>% 
+  select(Description, ASV, direction, direction.character) %>% 
+  unique() %>% 
+  ungroup %>% 
+  count(direction.character)
+
+```
+
+
+# Plot
+```{r, fig.height= 16, fig.width= 16}
+to.plot.selected <- to.plot %>%
+  mutate(Description = if_else(Description == "Sex",
+                               "Sex (f:m)",
+                               Description)) %>% 
+  mutate(ASV = paste(Species, ASV))
+
+
+this.plot <- to.plot.selected %>% 
+  filter(Group %in% c("Age/BMI/Sex"))
+g3.1 <- ggplot(this.plot,
+               aes(x = value, y = ASV, label =ASV)) +
+  geom_vline(xintercept = 0, color="grey") +
+  geom_point(aes(color = Site, 
+                 size = rel.abundance,
+                 shape = Site), alpha = 0.9) +
+  facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
+  labs(size = "Abun. (%)", x = "log2 fold change", y  = "ASVs") +
+  theme(legend.position = "right") +
+  guides(size=guide_legend(ncol=1), color = guide_legend(ncol=1), shape = guide_legend(ncol=1)) +
+  scale_color_manual(values = pal) +
+  scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 5)) +
+  ggpubr::rotate_x_text(angle = 45) +
+  theme(strip.text.y.right = element_text(angle = 0))
+
+this.plot <-   to.plot.selected %>% 
+  filter(Group %in% c("Diet"))
+g3.2 <- ggplot(this.plot,
+               aes(x = value, y = ASV, label =ASV)) +
+  geom_vline(xintercept = 0, color="grey") +
+  geom_point(aes(color = Site, 
+                 size = rel.abundance,
+                 shape = Site), alpha = 0.9) +
+  facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
+  labs(size = "Abun. (%)", x = "log2 fold change", y  = "ASVs") +
+  theme(legend.position = "right") +
+  guides(size=guide_legend(ncol=1), color = guide_legend(ncol=1), shape = guide_legend(ncol=1)) +
+  scale_color_manual(values = pal) +
+  scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 0.5)) +
+  ggpubr::rotate_x_text(angle = 45) +
+  theme(strip.text.y.right = element_text(angle = 0))
+
+
+this.plot <-   to.plot.selected %>% 
+  filter(!Group %in% c(c("Age/BMI/Sex","Diet")))
+g3.3 <- ggplot(this.plot,
+               aes(x = value, y = ASV, label =ASV)) +
+  geom_vline(xintercept = 0, color="grey") +
+  geom_point(aes(color = Site, 
+                 size = rel.abundance,
+                 shape = Site), alpha = 0.9) +
+  facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
+  labs(size = "Abun. (%)", x = "log2 fold change", y  = "ASVs") +
+  theme(legend.position = "right") +
+  guides(size=guide_legend(ncol=1), color = guide_legend(ncol=1), shape = guide_legend(ncol=1)) +
+  scale_color_manual(values = pal) +
+  scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 0.5)) +
+  ggpubr::rotate_x_text(angle = 45) +
+  theme(strip.text.y.right = element_text(angle = 0))
+
+
+ggpubr::ggarrange(g3.1, g3.2, g3.3, labels = "AUTO", nrow = 3, heights = c(10, 8,6.5))
+
+```
+
+# Sesssion information
+
+```{r}
+sessionInfo()
+```
+

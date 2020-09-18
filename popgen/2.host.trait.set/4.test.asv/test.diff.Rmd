@@ -1,0 +1,159 @@
+---
+title: "Test associations with ASV"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+  index: "1"
+---
+
+
+# Introduction
+
+Test associations with ASV.
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 5,
+               fig.width = 4 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+
+# Set output directory
+d.out <- params$d.out
+index <- params$index
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(DESeq2)
+```
+
+## Import data
+```{r}
+# Input folders
+d.in.diversity <- "~/IKMB/projects/skin.associations/results/popgen/2.host.trait.set/2.get.diversity"
+
+micro <- paste0("i", index, ".","micro.rds") %>% 
+  paste0(d.in.diversity, "/", .) %>% 
+  readRDS()
+pheno <- paste0("i", index, ".","pheno.rds") %>% 
+  paste0(d.in.diversity, "/", .) %>% 
+  readRDS()
+dic <- "~/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
+  read.delim(stringsAsFactors = ) %>% 
+  filter(Cohort == "PopGen")
+```
+
+
+# Transform micro
+
+```{r}
+micro.t <- t(micro) %>% 
+  data.frame()
+```
+
+# Test Deseq
+
+
+```{r}
+controls <- c("t14110_gender", "t4_examination_age", "t277_BMI","wash", "cream")
+energy <- "GJ"
+
+# Remove id variables
+pheno <- pheno %>% select(-NGS_ID, -Participant_ID)
+variables <- colnames(pheno)
+
+# Set significance----
+q  <- 0.05
+
+res <- NULL
+for (i in variables){
+  
+  con <- controls
+  if ((dic %>% filter(Variable == i) %>% pull(Group) == "Diet") &
+      (i != energy)){
+    con <- c(controls, energy)
+  }
+  if (i %in% controls){
+    con <- setdiff(controls,i)
+  }
+  
+  f.full.cha <- paste(c(con,i), collapse = " + ") %>% 
+    paste(" ~", .)
+  f.null.cha <- paste(c(con), collapse = " + ") %>% 
+    paste(" ~", .)
+  
+  f.full <- f.full.cha %>% 
+    as.formula()
+  f.null <- f.null.cha %>% 
+    as.formula()
+  
+  dds <- DESeqDataSetFromMatrix(countData = micro.t,
+                                colData = pheno,
+                                design = f.full)
+  dds <- DESeq(dds, reduced = f.null, test = "LRT", sfType = "poscounts")
+  
+  in.res <- results(dds, independentFiltering =F,  tidy =T) 
+  
+  in.res <- in.res %>%
+    rename( "row" = "ASV") %>%
+    arrange(padj) %>%  
+    mutate(term = i,
+           full.formula = f.full.cha,
+           null.formula = f.null.cha)
+  res <- bind_rows(res, in.res)
+  
+}
+
+## Save output
+
+paste0("i", index, ".", "deseq.tsv") %>% 
+  paste0(d.out, "/", .) %>% 
+  write_tsv(res, .)
+
+```
+
+# Session information
+
+```{r}
+sessionInfo()
+```

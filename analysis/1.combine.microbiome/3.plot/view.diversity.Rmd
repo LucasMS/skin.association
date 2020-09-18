@@ -1,0 +1,156 @@
+---
+title: "Visualize diversity patterns of PopGen skin microbiome"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+# Introduction
+
+Here I will visually explore the diversity of PopGen skin microbiome. I will work with the pre-computed (see folder before) diversity measures. I want to visualize obvious patterns between the diversity measures and obvious phenotypes.
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 5,
+               fig.width = 4 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(vegan)
+library(reshape2)
+```
+
+## Import data
+```{r}
+# Input folders
+d.in.diversity <- "/home/lsilva/IKMB/projects/skin.associations/results/analysis/1.combine.microbiome/1.join.microbiome/"
+
+microenv <- "/home/lsilva/IKMB/projects/skin.associations/scripts/data.dic/skin.microenv.tsv" %>% 
+  read.delim(stringsAsFactors = F)
+
+meta <- "meta.rds" %>% 
+  paste0(d.in.diversity, "/", .) %>% 
+  readRDS() %>% 
+  left_join(microenv, by = "Site") %>% 
+  mutate(Site = if_else(Site == "Antecubital fossa" &
+                          Cohort == "KORA FF4",
+                        "Antecubital fossa (K)",
+                        Site)) %>% 
+  mutate(Site = if_else(Site == "Antecubital fossa" &
+                          Cohort == "PopGen",
+                        "Antecubital fossa (P)",
+                        Site))
+
+micro.r <- "micro.r.rds" %>% 
+  paste0(d.in.diversity, "/", .) %>% 
+  readRDS()
+```
+
+
+# Get distances
+
+```{r}
+micro.dis <- micro.r %>%
+  vegdist("bray")
+```
+
+# Beta-diversity
+
+Let's have a look at the beta diversity
+
+## Calculate mds
+```{r}
+mds <- micro.dis %>% 
+  metaMDS(.,autotransform = F, trymax = 50)
+```
+
+## Visualize distance of samples
+```{r}
+
+to.plot.beta <- mds$points %>%
+  data.frame() %>% 
+  rownames_to_column("NGS_ID") %>% 
+  left_join(meta) %>%
+  group_by(Participant_ID)
+
+
+ggpubr::ggscatterhist(
+  to.plot.beta %>% 
+    mutate(Site = factor(Site, levels = c("Dorsal forearm",
+                                          "Volar forearm",
+                                          "Antecubital fossa (P)",
+                                          "Antecubital fossa (K)",
+                                          "Forehead",
+                                          "Retroauricular fold"))),
+  x = "MDS1", y = "MDS2",
+  color = "Site",
+  alpha = 0.4,
+  margin.params = list(fill = "Site", color = "darkgrey", size = 0.2),
+  margin.plot = "boxplot",
+  ggtheme = theme_few(),
+)
+
+```
+
+# Save
+
+```{r}
+"to.plot.beta.rds" %>%  
+  paste0(d.out, "/", .) %>% 
+  saveRDS(to.plot.beta, .)
+
+```
+
+
+# Session information
+
+```{r}
+sessionInfo()
+```

@@ -1,0 +1,163 @@
+---
+title: "Test associations in betadiversity"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+  index: "1"
+---
+
+
+# Introduction
+
+Test associations with beta diversity. 
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 5,
+               fig.width = 4 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+
+# Set output directory
+d.out <- params$d.out
+index <- params$index
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(vegan)
+library(foreach)
+library(doParallel)
+library(formula.tools)
+```
+
+## Import data
+```{r}
+# Input folders
+d.in.diversity <- "~/IKMB/projects/skin.associations/results/popgen/3.physio.set/2.get.diversity"
+
+micro.dis <- paste0("i", index, ".","micro.dis.rds") %>% 
+  paste0(d.in.diversity, "/", .) %>% 
+  readRDS()
+pheno <- paste0("i", index, ".","pheno.rds") %>% 
+  paste0(d.in.diversity, "/", .) %>% 
+  readRDS()
+
+dic <- "~/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
+  read.delim(stringsAsFactors = ) %>% 
+  filter(Cohort == "PopGen")
+```
+
+#Test variables on betadiversity.
+
+
+```{r}
+controls <- c("t14110_gender", "t4_examination_age", "t277_BMI","wash", "cream")
+energy <- c("t14559_TEWL_temperature", "t14558_TEWL_humidity")
+
+
+
+# Remove id variables
+pheno <- pheno %>% select(-NGS_ID, -Participant_ID)
+variables <- setdiff(colnames(pheno), c(controls, energy))
+# Set significance----
+q  <- 0.05
+
+
+# Set cpus ---
+nc <- 7
+
+res <- NULL
+for (i in variables){
+  
+  con <- controls
+  f.cha <- paste(c(con,i), collapse = " + ") %>% 
+    paste("micro.dis ~", .)
+  
+  if ("TEWL_specific" == i){
+    con <- c(controls, energy)
+    f.cha <- paste(c(con,i), collapse = " + ") %>% 
+      paste("micro.dis ~", .)
+  }
+  if (i %in% controls){
+    con <- setdiff(controls,i)
+    f.cha <- paste(c(con,i), collapse = " + ") %>% 
+      paste("micro.dis ~", .)
+  }
+  
+  f <- f.cha %>% 
+    as.formula()
+  res <- adonis2(f, data = pheno, permutations = 999, by = "terms", parallel = nc) %>% 
+    data.frame() %>% 
+    rownames_to_column("x") %>% 
+    rename("p.value" =  "Pr..F.") %>% 
+    rename("term" = "x")  %>% 
+    filter(term == i) %>% 
+    mutate(formula = f.cha) %>% 
+    bind_rows(res,.)
+  
+}
+
+res <- res %>% 
+  mutate(padj = p.adjust(p.value, "fdr"),
+         test = "adonis2",
+         selection = if_else(padj < q,
+                             "y",
+                             "n")) %>% 
+  arrange(p.value) 
+
+## Save output
+
+paste0("i", index, ".", "beta.final.res.tsv") %>% 
+  paste0(d.out, "/", .) %>% 
+  write_tsv(res, .)
+
+```
+
+
+# Session information
+
+```{r}
+sessionInfo()
+```
+

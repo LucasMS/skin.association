@@ -1,0 +1,215 @@
+---
+title: "Filter metadata"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 5,
+               fig.width = 4 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+library(ICC)
+library(vcd)
+
+theme_set(theme_few(base_size = 18))
+
+# Set seed for reproducibility
+set.seed(222)
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(finalfit)
+library(janitor)
+library(DataExplorer)
+```
+
+## Import data
+```{r}
+d.in <- d.out
+
+meta <- "samples.meta.f.rds" %>%
+  paste0(d.out, "/", .) %>%
+  readRDS()
+micro <- "samples.micro.f.rds" %>%
+  paste0(d.out, "/", .) %>%
+  readRDS()
+tax <- "samples.tax.f.rds" %>%
+  paste0(d.out, "/", .) %>%
+  readRDS()
+meta.dic <- "samples.meta.dic.f.rds" %>%
+  paste0(d.out, "/", .) %>%
+  readRDS()
+meta.dic.values <-"samples.meta.dic.values.f.rds" %>%
+  paste0(d.out, "/", .) %>%
+  readRDS()
+```
+
+
+# Introduction
+
+I will filter the microbiome and the metadata to to have a gold data.
+
+# Keep only phenotypic data
+
+```{r}
+non_pheno <- meta.dic %>%
+  # Get non phenotypic variables
+  filter(Group %in% c("Study", "16S Sequencing", "Sample")) %>%
+  # Exclude from the list important variables for ID and eventual phenotypic
+  filter(!Variable %in% c("NGS_ID", "Site", "lhr501x_v3", "Probennr")) %>%
+  pull(Variable)
+
+pheno.dic <- meta.dic %>%
+  filter(!Variable %in% non_pheno)
+pheno <- meta %>%
+  select(which(colnames(.) %in% pheno.dic$varname))
+
+# confirming
+identical(colnames(pheno), pheno.dic$varname)
+#cleaning
+rm(non_pheno)
+```
+
+
+# Exlude participants with local antibiotic or corticosteroid treatment within 7 days
+
+```{r}
+dim(pheno)
+pheno <- pheno %>%
+  filter(Hyhaottaoystwaosecftp7dImapAbtle.u3pd_04_1 == 0) %>% 
+  select(-Hyhaottaoystwaosecftp7dImapAbtle.u3pd_04_1)
+pheno.dic <- pheno.dic %>% 
+  filter(varname != "Hyhaottaoystwaosecftp7dImapAbtle.u3pd_04_1")
+dim(pheno)
+```
+
+# Exclude participants with anormalities when collecting samples
+
+```{r}
+dim(pheno)
+pheno <- pheno %>%
+  filter(is.na(u3pd_08)) %>% 
+  select(-u3pd_08)
+pheno.dic <- pheno.dic %>% 
+  filter(varname != "u3pd_08")
+dim(pheno)
+```
+
+
+# Get Gold standards
+
+```{r}
+pheno.gold <- pheno
+pheno.dic <- pheno.dic %>%
+  right_join(pheno %>%
+               colnames() %>% 
+               data.frame(varname = .),
+             by = "varname")
+```
+
+### Get dictionary
+```{r}
+pheno.gold.dic <- colnames(pheno.gold) %>%
+  data.frame(varname = .) %>%
+  left_join(pheno.dic, by = "varname")
+```
+
+```{r}
+pheno.gold.dic.values <- meta.dic.values %>%
+  filter(varname %in% pheno.dic$varname)
+```
+
+## Keep microbiome data of selected samples
+
+## Select participants
+```{r}
+micro.gold <- micro[match(pheno.gold$NGS_ID, rownames(micro)),]
+identical(pheno.gold$NGS_ID, rownames(micro.gold))
+```
+
+
+## Select ASVs that are not empty
+```{r}
+micro.gold <- micro.gold[,colSums(micro.gold) > 0]
+```
+
+## Match tax
+
+```{r}
+tax.gold <- colnames(micro.gold) %>%
+  data.frame(ASV = .) %>%
+  left_join(tax, by = "ASV")
+identical(colnames(micro.gold), tax.gold$ASV)
+```
+
+# Save outputs
+
+Gold
+
+```{r}
+"pheno.all.gold.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(pheno.gold, .)
+"micro.all.gold.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(micro.gold, .)
+"tax.all.gold.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(tax.gold, .)
+"pheno.dic.all.gold.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(pheno.gold.dic, .)
+"pheno.dic.values.all.gold.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(pheno.gold.dic.values, .)
+```
+
+# Session information
+
+```{r}
+sessionInfo()
+```
+

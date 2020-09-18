@@ -1,0 +1,58 @@
+Cohort	Group	Description	Displayed.description	Variable	Type
+KORA FF4	Age/BMI/Sex	Site	Site	Site	Discrete
+KORA FF4	Pets	If yes, which one? …Dog	Dog	IfyeswhichonDog.u3s_u1a	Continuous
+KORA FF4	Pets	…Cat	Cat	Cat.u3s_u1b	Continuous
+KORA FF4	Pets	... Rodent	Rodent	Rodent.u3s_u1d	Continuous
+KORA FF4	Pets	…Other	Other	Other.u3s_u1e	Continuous
+KORA FF4	Pets	If you do not have your own pet: do you have contact with other people's pets (such as friends or family members)?	Animal contact	IydnhyopDyhcwoppsafofm.u3s_u3	Continuous
+KORA FF4	Environment	How many hours a day do you spend on average outdoors (eg cycling, walking, sports, gardening)? ... Monday-friday in summer (daily hours)	Hours outdoors - In summer (per week)	HmhaddysoaoecwsgMisdh.u3s_t2a	Continuous
+KORA FF4	Environment	... Monday-friday in winter (daily hours)	Hours outdoors - In winter (per week)	MndyFrdyinwntdh.u3s_t2b	Continuous
+KORA FF4	Environment	... Saturday / sunday in summer (daily hours):	Hours outdoors - In summer (per weekend)	StrdySndyinsmdh.u3s_t2c	Continuous
+KORA FF4	Environment	... Saturday / sunday in winter (daily hours):	Hours outdoors - In winter (per weekend)	StrdySndyinwndh.u3s_t2d	Continuous
+KORA FF4	Environment	How often do you use sunscreen in active sunshine (ie sunscreen, clothing, sunglasses)? … In summer	Sun protection in summer (frequency)	Hodyusiasiscsis.u3s_t3a	Continuous
+KORA FF4	Environment	Where do you spend most of your free time outdoors? On weekends / on days off: - beach / lake	Free time outdoors - Beach / lake	WdysmoyftoowodoBL.u3s_t4a1	Continuous
+KORA FF4	Environment	- Green spaces	Free time outdoors - Green spaces	green.spaces.u3s_t4a2	Continuous
+KORA FF4	Environment	- Urban spaces	Free time outdoors - Urban spaces	Urban.spaces.u3s_t4a3	Continuous
+KORA FF4	Environment	- Mountain region	Free time outdoors - Mountain region	mountain.region.u3s_t4a4	Continuous
+KORA FF4	Environment	On holiday: - beach / lake	Holidays outdoors - Beach / lake	onholidaybechlk.u3s_t4b1	Continuous
+KORA FF4	Environment	- Green spaces	Holidays outdoors - Green spaces	green.spaces.u3s_t4b2	Continuous
+KORA FF4	Environment	- Urban spaces	Holidays outdoors - Urban spaces	Urban.spaces.u3s_t4b3	Continuous
+KORA FF4	Environment	- Mountain region	Holidays outdoors - Mountain region	mountain.region.u3s_t4b4	Continuous
+KORA FF4	Age/BMI/Sex	Age to the deadline	Age (y)	Agetothedeadlin.u3talter	Continuous
+KORA FF4	Age/BMI/Sex	Gender	Sex	gender.u3csex	Continuous
+KORA FF4	Lifestyle	Smoking	Smoking	smoking.u3tcigsmk	Continuous
+KORA FF4	Health parameters	Did you take antibiotics in the last 2 months?	Antibiotics (<2m)	Ddytkantbtitl2m.u3sf_01	Continuous
+KORA FF4	Education/Dwelling	Marital status	Cohabiting couple	marital.status.u3tfamstd	Discrete
+KORA FF4	Education/Dwelling	Highest vocational qualification (variable from s4 study ltberufb)	Highest vocational qualification	HVQvfS4sLTBERUF.u3tberufb	Discrete
+KORA FF4	Education/Dwelling	Location based on geocode record information for geocode deadline (dec 31, 2013)	Location	LBoGRIfGDD31201.u3tortgc	Discrete
+KORA FF4	Diet	Energy (kilocalories) [kcal / d]	Energy (kcal/d)	Energy.u3v_gcal	Continuous
+KORA FF4	Diet	Protein (protein) [g / d]	Protein (g/d)	Protein.protein.u3v_ze	Continuous
+KORA FF4	Diet	Fat [g / d]	Fat (g/d)	Fat.u3v_zf	Continuous
+KORA FF4	Diet	Carbohydrates, absorbable [g / d]	Carbohydrate (g/d)	Crbhydrtsabsrbb.u3v_zk	Continuous
+KORA FF4	Diet	Fiber [g / d]	Fiber (g/d)	Fiber.u3v_zb	Continuous
+KORA FF4	Lifestyle	Alcohol (ethanol) [g / d]	Alcohol (g/d)	Alcohol.ethanol.u3v_za	Continuous
+KORA FF4	Age/BMI/Sex	Bmi	BMI (kg/m2)	BMI.u3tbmi	Continuous
+KORA FF4	Skin care	Wash (last 12h)	Wash (<24h)	wash	Continuous
+KORA FF4	Skin care	Cream (last 12h)	Lotion/cream (<24h)	cream	Continuous
+PopGen	Skin care	Wash	Wash (<24h)	wash	Discrete
+PopGen	Skin care	Cream	Lotion/cream (<24h)	cream	Discrete
+PopGen	Age/BMI/Sex	Site	Site	Site	Discrete
+PopGen	Diet	Total energy [kj/day]	Energy (kcal/d)	GJ	Continuous
+PopGen	Others	Alcohol [g/day]	Alcohol (g/d)	ZA	Continuous
+PopGen	Diet	Fibre [g/day]	Fiber (g/d)	ZB	Continuous
+PopGen	Diet	Protein [g/day]	Protein (g/d)	ZE	Continuous
+PopGen	Diet	Fat [g/day]	Fat (g/d)	ZF	Continuous
+PopGen	Diet	Carbohydrates [g/day]	Carbohydrate (g/d)	ZK	Continuous
+PopGen	Others	What are your smoking habits?	Smoking	t14498_smoking_habits_6m	Discrete
+PopGen	Others	Have you been treated with antibiotics during the last 6 weeks?	Antibiotics (<6w)	t1922_antibiotics_6_weeks	Discrete
+PopGen	Others	Have you taken antibiotics during the last 6 months?	Antibiotics (<6m)	t1774_antibiotics_6_month	Discrete
+PopGen	Age/BMI/Sex	Gender (add new value = 3 for all questionnaires collected since 2019 exclusive foc_f2)	Sex	t14110_gender	Discrete
+PopGen	Others	Skin type fitzpatrick	Skin type Fitzpatrick	t14520_Fitzpatrick_type	Discrete
+PopGen	Others	Transepidermal water loss (tewl), humidity in percent	Humidity (%, TEWL)	t14558_TEWL_humidity	Continuous
+PopGen	Others	Transepidermal water loss (tewl), ambient temperature in °c	Ambient temperature (°C, TEWL)	t14559_TEWL_temperature	Continuous
+PopGen	Age/BMI/Sex	Age at examination	Age (y)	t4_examination_age	Continuous
+PopGen	Age/BMI/Sex	Bmi from values measured in in-house examination (body mass index: weight/((height/100)^2)	BMI (kg/m2)	t277_BMI	Continuous
+PopGen	Others	Sport in summer [h/week]	Sport in summer (h/week)	sport_s	Continuous
+PopGen	Others	Regular do sport [1 = y / 0 = n]	Regular sports	reg_sports	Continuous
+PopGen	Others	TEWL	TEWL	TEWL_specific	Continuous
+PopGen	Others	pH	pH	ph_specific	Continuous

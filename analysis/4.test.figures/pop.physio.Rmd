@@ -1,0 +1,373 @@
+---
+title: "Make figures for PopGen skin physiology"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+# scale_fill_discrete <- function(...) {
+#    scale_fill_manual(..., values = cbp1)
+# }
+# scale_colour_discrete <- function(...) {
+#   scale_colour_manual(..., values = cbp1)
+# }
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(reshape2)
+library(RColorBrewer)
+library(tidytext)
+library(UpSetR)
+library(Hmisc)
+```
+
+```{r}
+microenv <- "~/IKMB/projects/skin.associations/scripts/data.dic/skin.microenv.tsv" %>% 
+  read_tsv()
+
+tax <- "~/IKMB/projects/skin.associations/results/analysis/1.combine.microbiome/1.join.microbiome/master.tax.rds" %>% 
+  readRDS()
+
+deseq <- "~/IKMB/projects/skin.associations/results/analysis/3.results.tables/asv.tsv" %>% 
+  read_tsv() %>% 
+  filter(Test.batch == "Skin physio") %>% 
+  filter(Cohort == "PopGen")
+# Import beta
+
+beta <- "~/IKMB/projects/skin.associations/results/analysis/3.results.tables/beta.tsv"  %>% 
+  read_tsv() %>% 
+  filter(Test.batch == "Skin physio") %>% 
+  filter(Cohort == "PopGen")
+``` 
+
+# Set variables
+
+```{r}
+pal <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")[c(2,5,1,6,7,8)][c(1,2,3,5)]
+
+order.col <- c("Dorsal forearm",
+               "Volar forearm",
+               "Antecubital fossa",
+               "Forehead")
+sites <- deseq %>% 
+  select(Site, Cohort) %>% 
+  unique %>% 
+  mutate(names = abbreviate(paste0(Site,
+                                   ".",
+                                   str_sub(Cohort,1,1))) %>% make.names())
+
+
+weights <- deseq %>% 
+  select(rel.abundance, seqs, Site) %>% 
+  unique()
+```
+
+
+# Plot Beta
+
+## Names
+```{r}
+beta <- beta %>%
+  filter(Cohort == "PopGen") %>% 
+  filter(Sig. == "y") %>% 
+  mutate(Site = factor(Site,
+                       levels = order.col))
+beta
+```
+
+# Process ASV
+
+```{r}
+res <- deseq
+```
+
+## Join results 
+
+```{r}
+sites <- res %>% 
+  select(Site, Cohort) %>% 
+  unique %>% 
+  mutate(names = abbreviate(paste0(Site,
+                                   ".",
+                                   str_sub(Cohort,1,1))) %>% make.names())
+
+weights <- res %>% 
+  select(rel.abundance, seqs, Site) %>% 
+  unique()
+
+df <- res %>%
+  filter(Site == sites$Site[1]) %>% 
+  select(seqs, Group, Description, log2FoldChange, lfcSE, stat, pvalue, padj) 
+
+colnames(df) <- c("seqs", "Group", "Description", sites$names[1], 
+                  paste0(sites$names[1], "_", "lfcSE"),
+                  paste0(sites$names[1], "_", "stat"), 
+                  paste0(sites$names[1], "_", "pvalue"),
+                  paste0(sites$names[1], "_", "padj"))
+
+
+for (i in 2:nrow(sites)){
+  df.temp <- res %>%
+  filter(Site == sites$Site[i]) %>% 
+  select(seqs, Group, Description, log2FoldChange, lfcSE, stat, pvalue, padj) 
+colnames(df.temp) <- c("seqs", "Group", "Description", sites$names[i], 
+                  paste0(sites$names[i], "_", "lfcSE"),
+                  paste0(sites$names[i], "_", "stat"), 
+                  paste0(sites$names[i], "_", "pvalue"),
+                  paste0(sites$names[i], "_", "padj"))
+  
+  
+  df <- full_join(df,
+                  df.temp,
+                  by = c("seqs", "Group", "Description"))
+  rm(df.temp)
+}
+
+```
+
+## Add taxonomy
+
+```{r}
+df <- df %>%
+  left_join(tax %>% select(seqs, everything()), by = "seqs") 
+```
+
+## Format
+
+
+```{r}
+to.plot <- df %>% 
+  select(sites$names, Phylum, Family, Genus, Species,seqs, ASV, Group, Description) %>% 
+  melt(id.vars = c("Phylum", "Genus", "Family", "Species","seqs", "ASV", "Group", "Description")) %>% 
+  mutate(value = value %>% as.numeric()) %>% 
+  rename("names" = "variable") %>% 
+  left_join(sites, by = "names") %>% 
+  left_join(microenv, by =  "Site") %>% 
+  filter((Site %in% sites$Site) & (!is.na(value))) %>% 
+  mutate(Species = if_else(str_detect(Species, "(unc.)"),
+                           Species,
+                           paste0(Genus," ",Species))) %>%
+  mutate(Species = gsub("\\(unc.\\)",  "", Species)) %>% 
+  left_join(weights, by = c("Site", "seqs")) %>% 
+  unique() %>% 
+   mutate(Site = factor(Site,
+                       levels = order.col))
+  
+```
+
+# Count associations
+```{r, fig.width=14, fig.height=14}
+
+unique.associations.site <- count(to.plot, ASV, Description) %>%
+  mutate(n = as.character(n)) %>%
+  count(n)
+# Count associations
+unique.associations.site
+unique.associations.site %>% pull(nn) %>% sum
+
+unique.associations.site %>% 
+  ggplot(aes(x = n, y = nn)) +
+  geom_col()
+```
+
+
+# Select ASVs to consider
+
+```{r}
+to.consider <- count(to.plot, ASV, Description) %>% 
+  filter(n > 1) %>% 
+  select(-n)
+
+to.plot <- to.plot %>% 
+  right_join(to.consider, by = c("ASV", "Description"))
+```
+
+# Overview
+
+```{r, warning=F}
+asvs.per.site <- to.plot %>% 
+  mutate(Microenvironment = if_else(Microenvironment == "Sebaceous",
+                                    "Seb.",
+                                    Microenvironment)) %>% 
+  group_by(Description, Site, Group, Microenvironment) %>% count()
+
+g1.1 <- asvs.per.site %>% 
+  ggplot(aes(x = Site, y = Description)) +
+  geom_tile(aes(fill = n)) +
+  ggpubr::rotate_x_text() +
+  facet_grid(cols = vars(Microenvironment), scales = "free", space = "free") +
+  labs (fill = "ASVs (n)", y = "Factor") +
+  theme(legend.position = "bottom") +
+  scale_fill_continuous(breaks=seq(0,30,by= 5))
+g1.1
+
+
+asvs.per.site %>% 
+  arrange(desc(n))
+
+```
+
+
+# General overview 
+
+```{r, warning=F}
+top.associations <- to.plot %>% 
+  mutate(presence = 1) %>% 
+  group_by(Genus, Family, Phylum, Site) %>% 
+  summarise(sum = sum(presence)) %>%
+  mutate(weights = if_else(Site %in% c("Volar forearm",
+                                       "Dorsal forearm"),
+                           0.5,
+                           1)) %>% 
+  group_by(Genus, Family, Phylum) %>% 
+  #get averages
+  summarise(avg.per.microenvironemt = weighted.mean(sum, weights), sd.per.microenvironemt = sqrt(wtd.var(sum, weights))) %>% 
+  arrange(desc(avg.per.microenvironemt)) %>% 
+  ungroup() %>%
+  top_n(n = 10, wt = avg.per.microenvironemt) %>% 
+  mutate(Genus = factor(Genus, levels=unique(Genus))) 
+
+g2 <- ggplot(top.associations, aes(x = Genus, y = avg.per.microenvironemt, fill = Phylum)) +
+  geom_col() +
+  scale_fill_brewer(palette = "Dark2") +
+  ggpubr::rotate_x_text()+
+  labs(y = "ASVs/\nmicroen.") +
+  theme(legend.position = "bottom") +
+  geom_errorbar(aes(ymin=avg.per.microenvironemt-sd.per.microenvironemt, ymax=avg.per.microenvironemt+sd.per.microenvironemt), width=.2,
+                position=position_dodge(.9)) +
+  guides(fill=guide_legend(ncol=2))
+
+g2
+top.associations
+```
+
+# Overview by genus
+```{r, warning=F}
+
+associations <- to.plot %>% 
+  mutate(presence = 1) %>% 
+  group_by(Genus, Family, Phylum, Site, Group, Description) %>% 
+  summarise(sum = sum(presence), value = mean(abs(value))) %>%
+  mutate(weights = if_else(Site %in% c("Volar forearm",
+                                       "Dorsal forearm"),
+                           0.5,
+                           1)) %>% 
+  group_by(Genus, Family, Phylum, Group, Description) %>% 
+  #get averages
+  summarise(avg.per.microenvironemt = weighted.mean(sum, weights), sd.per.microenvironemt = sqrt(wtd.var(sum, weights)),
+            lfc.avg.per.microenvironemt = weighted.mean(value, weights),
+            lfc.sd.per.microenvironemt = sqrt(wtd.var(value, weights)))
+```
+
+# Plot overview figure
+```{r, fig.width= 16, fig.height=7}
+g12 <- ggpubr::ggarrange(g1.1, g2, labels = "AUTO",  nrow = 2, heights = c(3,3))
+g12
+```
+
+# Get ASV plots
+
+```{r, fig.width=14, fig.height=14}
+to.plot.selected <- to.plot %>% 
+  filter(Genus %in% c("Staphylococcus", "Corynebacterium", "Paracoccus")) %>%
+  mutate(Species = str_replace(Species, "Staphylococcus", "S.")) %>% 
+  mutate(Species = str_replace(Species, "Corynebacterium", "C.")) %>% 
+  mutate(Species = str_replace(Species, "Paracoccus", "P.")) %>% 
+  mutate(Species = str_replace(Species, "Lactobacillus", "L.")) %>% 
+  mutate(Species = paste(Species, ASV)) %>% 
+  mutate(Genus = abbreviate(Genus, minlength = 4, dot = T)) %>% 
+  mutate(Description = case_when(Description == "Skin type (Fitzpatrick)" ~ 
+                                   "Skin type\n(Fitzpatrick)",
+                                 Description == "Transepidermal water loss" ~
+                                   "TEWL",
+                                 TRUE ~ Description))
+
+
+
+g3 <- ggplot(to.plot.selected,
+             aes(x = value, y = Species, label = Species)) +
+  geom_vline(xintercept = 0, color="grey") +
+  geom_point(aes(color = Site,
+                 size = rel.abundance,
+                 shape = Site), alpha = 0.7) +
+  facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
+  labs(size = "Abun. (%)", x = "log2 fold change", y  = "ASVs") +
+  theme(legend.position = "bottom") +
+  guides(size=guide_legend(ncol=1), color = guide_legend(ncol=1), shape = guide_legend(ncol=1)) +
+  scale_color_manual(values = pal) +
+  scale_size_continuous(breaks=seq(0,max(to.plot.selected$rel.abundance), by= 2))
+  
+
+g3
+
+
+```
+
+# Plot final figure
+```{r, fig.height = 10, fig.width = 12}
+ggpubr::ggarrange(g12, g3, labels = c("", "C"), ncol = 2, widths = c(1,1.6))
+```
+
+# Session information
+
+```{r}
+sessionInfo()
+```

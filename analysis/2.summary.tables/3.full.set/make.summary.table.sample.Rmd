@@ -1,0 +1,156 @@
+---
+title: "Make table"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+# Introduction
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 1, width = 120, qwraps2_markup = "markdown")
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+scale_fill_discrete <- function(...) {
+  scale_fill_manual(..., values = cbp1)
+}
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbp1)
+}
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(qwraps2)
+```
+
+## Import data
+```{r}
+pop.data.folder <- "~/IKMB/projects/skin.associations/results/popgen/1.full.set" 
+kora.data.folder <- "~/IKMB/projects/skin.associations/results/kora/1.full.set"
+
+
+#Read pop data
+fin <- data.frame(index = c("i1","i2","i3", "i4"), Site = c("Antecubital fossa","Volar forearm", "Dorsal forearm",  "Forehead"))
+
+
+pop.pheno <- NULL
+for (i in 1:nrow(fin)){
+  pop.pheno <- paste0(pop.data.folder, "/2.get.diversity/",
+                      fin$index[i],
+                      ".pheno.rds") %>% 
+    readRDS() %>% 
+    mutate(Site = fin$Site[i]) %>% 
+    bind_rows(pop.pheno,.)
+}
+
+# Read kora data
+#Read pop data
+fin <- data.frame(index = c("i1","i2"), Site = c("Antecubital fossa","Retroauricular fold"))
+
+
+kora.pheno <- NULL
+for (i in 1:nrow(fin)){
+  kora.pheno <- paste0(kora.data.folder, "/2.get.diversity/",
+                       fin$index[i],
+                       ".pheno.rds") %>% 
+    readRDS() %>% 
+    mutate(Site = fin$Site[i]) %>% 
+    bind_rows(kora.pheno,.)
+}
+
+```
+
+## Join phenotypic data
+
+```{r}
+comb.pheno <- bind_rows(kora.pheno %>% 
+                          mutate(Cohort = "KORA FF4") %>% 
+                          select(wash, cream, Participant_ID, NGS_ID, Cohort, Site),
+                        pop.pheno %>% 
+                          mutate(Cohort = "PopGen") %>% 
+                          select(wash, cream, Participant_ID, NGS_ID, Cohort, Site)) %>% 
+  group_by(Cohort) %>% 
+  rename("Wash" = "wash",
+         "Lotion" = "cream") 
+
+```
+
+# Make table
+
+## Participant data
+```{r, results="asis"}
+comb.pheno <- comb.pheno %>% 
+  mutate(Site = case_when(Site == "Antecubital fossa" & Cohort == "KORA FF4" ~ "Antecubital fossa (K)", 
+                          Site == "Antecubital fossa" & Cohort == "PopGen" ~ "Antecubital fossa (P)",
+                          TRUE ~ Site))
+
+our_summary1 <- list(
+  "Skin care" = list("Wash (<24h)" = ~ n_perc0(.data$Wash == "yes"),
+                     "Lotion/cream (<24h)" = ~ n_perc0(.data$Lotion == "yes")))
+
+
+whole <- summary_table(group_by(comb.pheno, .data$Site), our_summary1)
+whole
+
+```
+
+
+# Session information
+
+```{r}
+sessionInfo()
+```

@@ -1,0 +1,210 @@
+---
+title: "Get variables"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+# Introduction
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 10))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+scale_fill_discrete <- function(...) {
+  scale_fill_manual(..., values = cbp1)
+}
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbp1)
+}
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(RColorBrewer)
+library(reshape2)
+library(vegan)
+```
+
+## Import data
+```{r}
+dic.common <- "~/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
+  read.delim(sep = "\t", stringsAsFactors = F) %>% 
+  unique()
+
+
+pop.folder <- "~/IKMB/projects/skin.associations/results/popgen/2.host.trait.set/1.filter.samples.and.metadata/" 
+
+kora.folder <- "~/IKMB/projects/skin.associations/results/kora/2.host.trait.set/1.filter.samples.and.metadata/"
+
+#Read pop data
+pop.dic <- "pheno.dic.all.gold.rds" %>% 
+  paste0(pop.folder, "/", .) %>%
+  readRDS()
+# Read kora data
+
+kora.dic <- "pheno.dic.all.gold.rds" %>% 
+  paste0(kora.folder, "/", .) %>% 
+  readRDS(.)
+```
+
+
+
+# Join dictionaries
+
+## Format pop.dic
+
+```{r}
+pop.dic <- pop.dic %>%
+  mutate(Group = if_else(varname %in% c("wash", "cream"),
+                         "Skin care",
+                         Group)) %>% 
+  mutate(Description = if_else(varname %in% c("wash", "cream"),
+                               str_to_sentence(varname),
+                               Description)) %>% 
+  mutate(Variable = if_else(varname %in% c("wash", "cream"),
+                            str_to_sentence(varname),
+                            Variable)) %>% 
+  select(varname, Group, Description, type) %>% 
+  mutate(Cohort = "PopGen") %>% 
+  rename("Type" = "type") %>% 
+  mutate(Description = if_else(varname == "Site",
+                               "Site",
+                               Description)) 
+
+```
+
+## Format kora.dic
+
+
+```{r}
+kora.dic <- kora.dic %>% 
+  mutate(Group = if_else(varname %in% c("wash", "cream"),
+                         "Skin care",
+                         Group)) %>% 
+  mutate(Group = if_else(varname %in% c("wash", "cream"),
+                         "Skin care",
+                         Group)) %>% 
+  mutate(Group = if_else(varname %in% c("Whchdscrptnbsyt.u3s_t1"),
+                         "Skin",
+                         Group)) %>% 
+  select(varname, Group, Description, Type) %>% 
+  mutate(Cohort = "KORA FF4") %>% 
+  mutate(Type = if_else(is.na(Type),
+                        "discrete",
+                        "continuous"))
+
+```
+# Join dic
+```{r}
+dic <- bind_rows(kora.dic, pop.dic) %>% 
+  mutate(Group = if_else(varname %in% c("NGS_ID", "Participant_ID"),
+                         "ID",
+                         Group))
+#rm(pop.dic, kora.dic)
+```
+
+# remove IDs
+
+```{r}
+dic <- dic %>% 
+  filter(Group != "ID")
+```
+
+
+# Add unifying description
+
+```{r}
+dic <- dic %>%
+  select(varname, Cohort, Description) %>% 
+  left_join(dic.common %>% 
+              select(Variable, Cohort, Group, Displayed.description, Type), by = c("varname" = "Variable", "Cohort"))
+```
+
+# Final formating
+
+```{r}
+dic <- dic %>% 
+  rename("Variable" = "varname") %>% 
+  select(Cohort, Group, Description, Displayed.description, Variable, Type) %>% 
+  mutate(Type = str_to_sentence(Type)) %>% 
+  mutate(Group = case_when(
+                           Group %in% c("Smoking", "Physical activity") ~ "Lifestyle",
+                           Group %in% c("Biometric") ~ "Age/BMI/Sex",
+                           Displayed.description %in% c("Alcohol", "Smoking") ~ "Lifestyle",
+         TRUE ~ Group)) %>% 
+  mutate(Group = if_else(Displayed.description == "Alcohol (g/d)",
+                         "Lifestyle",
+                         Group)) %>% 
+  mutate(Displayed.description = if_else(Displayed.description %in% 
+                                           c("Antibiotics (<2m)",
+                                             "Antibiotics (<6w)"),
+                                         "Antibiotics (<6-8w)",
+                                         Displayed.description))
+```
+
+
+```{r}
+"variables.kora.pop.tsv" %>% 
+  paste0(d.out, "/", .) %>% 
+  write_tsv(dic, .)
+```
+
+# Session information
+
+```{r}
+sessionInfo()
+```

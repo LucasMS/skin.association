@@ -1,0 +1,264 @@
+---
+title: "Grab results from ASV"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+scale_fill_discrete <- function(...) {
+  scale_fill_manual(..., values = cbp1)
+}
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbp1)
+}
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+
+```
+
+# Master taxonomy
+```{r}
+#Add taxonomy
+tax <- "~/IKMB/projects/skin.associations/results/analysis/1.combine.microbiome/1.join.microbiome/master.tax.rds" %>% 
+  readRDS()
+```
+
+# Function to import data
+
+```{r}
+import.data <- function(tax, dic, d.master, cohort, test.batch){
+  if (cohort == "PopGen"){
+    ASV.prefix = "ASVp"
+    fin <- data.frame(index = c("1","2","3", "4"),
+                      Site = c("Antecubital fossa","Volar forearm", "Dorsal forearm",  "Forehead"),
+                      stringsAsFactors = F)
+  }
+  if (cohort == "KORA FF4"){
+    ASV.prefix = "ASVk"
+    fin <- data.frame(index = c("1","2"),
+                      Site = c("Antecubital fossa", "Retroauricular fold"),
+                      stringsAsFactors = F)
+  }
+  
+  
+  d <- paste0(d.master, "/", "4.test.asv")
+  #Files
+  f.in <- list.files(d, "*.tsv") %>% 
+    data.frame(f = .) %>%
+    mutate(index = str_sub(f, 2,2)) %>% 
+    mutate(f = paste0(d, "/", f)) 
+  
+  #import
+  
+  res <- list()
+  for (i in 1:nrow(f.in)){
+    res[[paste0(f.in$index[i], "_", cohort)]] <-
+      read.delim(f.in$f[i], stringsAsFactors = F) %>% 
+      mutate(index = f.in$index[i]) %>% 
+      rename(!!ASV.prefix := "ASV") %>% 
+      filter(padj <0.05) %>% 
+      mutate(Cohort = cohort) %>% 
+      # Add taxonomy
+      left_join(tax, by = ASV.prefix) %>% 
+      # Add description
+      left_join(dic, by = c("term" = "Variable", "Cohort")) %>% 
+      # Add site names
+      left_join(fin, by = "index")
+  }
+  rm(f.in)
+  
+  
+  weights <- NULL
+  for (i in 1:nrow(fin)){
+    micro.r <- paste0(paste0(d.master, "/", "2.get.diversity/"),
+                      paste0("i",fin$index[i]),
+                      ".micro.rarefied.rds") %>% 
+      readRDS()
+    w <- (colSums(micro.r) *100)/sum(micro.r)
+    w <- w %>% 
+      data.frame(rel.abundance =.) %>%
+      rownames_to_column(ASV.prefix) %>% 
+      mutate(Site = fin$Site[i])
+    weights <- bind_rows(weights,w)
+    rm(w, micro.r)
+  }
+  
+  
+  
+  if (cohort == "PopGen"){
+    df  <- bind_rows(res[[1]], res[[2]], res[[3]], res[[4]])
+  }
+  if (cohort == "KORA FF4"){
+    df  <- bind_rows(res[[1]], res[[2]])
+  }
+  
+  df  <- df %>% 
+    # add weights
+    left_join(weights, by = c(ASV.prefix, "Site")) %>%
+    mutate(Test.batch = test.batch) %>% 
+    mutate(Cohort = cohort) %>% 
+    mutate(`Sig.` = if_else(padj < 0.05,
+                            "y",
+                            "n")) %>% 
+    
+    select(-term, -index) %>% 
+    arrange(Site,Description, padj) %>% 
+    select(Test.batch, Cohort, Group, Description, Site, ASV, rel.abundance, Genus, Species,
+           padj, `Sig.`, everything())
+  rm(res,dic, d, d.master, fin, weights)
+  return(df)}
+```
+
+# Popgen host trait set
+```{r}
+dic <- "~/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
+  read_tsv %>%
+  mutate(Displayed.description = if_else(Variable == "t1922_antibiotics_6_weeks",
+                                         "Antibiotics (<6-8w)",
+                                         Displayed.description)) %>% 
+  mutate(Description = Displayed.description) %>% 
+  select(Variable, Cohort, Group, Description) %>% 
+  filter(Cohort == "PopGen")
+
+# Directory
+d.master <- "~/IKMB/projects/skin.associations/results/popgen/2.host.trait.set"
+cohort <- "PopGen"
+test.batch <- "Age/BMI/Sex/Lifestyle"
+
+pop.all <- import.data(tax, dic, d.master, cohort, test.batch)
+
+```
+
+# Kora host trait set
+
+```{r}
+dic <- "~/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
+  read_tsv %>%
+  mutate(Displayed.description = if_else(Variable == "Ddytkantbtitl2m.u3sf_01",
+                                         "Antibiotics (<6-8w)",
+                                         Displayed.description)) %>% 
+  mutate(Description = Displayed.description) %>%
+  select(Variable, Cohort, Group, Description) %>% 
+  filter(Cohort == "KORA FF4")
+
+
+
+d.master <- "~/IKMB/projects/skin.associations/results/kora/2.host.trait.set"
+cohort <- "KORA FF4"
+test.batch <- "Age/BMI/Sex/Lifestyle"
+
+
+kora.pop <- import.data(tax, dic, d.master, cohort, test.batch)
+```
+
+# Popgen skin physiology set
+
+```{r}
+# Add dic
+dic <- "~/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
+  read_tsv %>%
+  mutate(Description = Displayed.description) %>% 
+  select(Variable, Cohort, Group, Description) %>% 
+  filter(Cohort == "PopGen")
+
+
+d.master <- "~/IKMB/projects/skin.associations/results/popgen/3.physio.set/"
+cohort = "PopGen"
+test.batch = "Skin physio"
+
+pop.tewl <- import.data(tax, dic, d.master, cohort, test.batch) 
+```
+
+
+# kora environment set
+
+```{r}
+dic <- "~/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
+  read_tsv %>%
+  mutate(Description = Displayed.description) %>% 
+  filter(Cohort == "KORA FF4") %>% 
+  select(Variable, Cohort, Group, Description)
+
+d.master <- "~/IKMB/projects/skin.associations/results/kora/3.env.set/"
+cohort = "KORA FF4"
+test.batch = "Environment"
+
+kora.env <- import.data(tax, dic, d.master, cohort, test.batch)
+```
+
+```{r}
+asv <- bind_rows(pop.all,
+                 kora.pop,
+                 pop.tewl,
+                 kora.env)
+```
+
+```{r}
+"asv.tsv" %>% 
+  paste0(d.out, "/",.) %>% 
+  write_tsv(asv, .)
+```
+
+# Session information
+
+```{r}
+sessionInfo()
+```

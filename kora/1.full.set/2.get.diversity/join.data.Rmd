@@ -1,0 +1,176 @@
+---
+title: "Join filtered data"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+# Introduction
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+scale_fill_discrete <- function(...) {
+   scale_fill_manual(..., values = cbp1)
+}
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbp1)
+}
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(vegan)
+```
+
+## Import data
+```{r}
+d.in <- d.out
+
+pheno <- NULL
+
+for (i in list.files(d.in, pattern = "*.pheno.rds")){
+
+index <- str_sub(i,2,2)
+if(index == "1"){site <- "Antecubital fossa"}
+if(index == "2"){site <- "Behind ear"}
+  
+  
+  pheno <- paste0(d.in, "/", i) %>% 
+    readRDS() %>% 
+    mutate(Site = site) %>% 
+    bind_rows(pheno, .)
+}
+
+
+micro <- NULL
+
+for (i in list.files(d.in, pattern = "*.micro.rds")){
+  micro <- paste0(d.in, "/", i) %>% 
+    readRDS() %>% 
+    rownames_to_column("NGS_ID") %>% 
+    bind_rows(micro, . )
+}
+
+micro <- column_to_rownames(micro, "NGS_ID")
+micro[is.na(micro)] <- 0
+
+micro.r <- NULL
+
+for (i in list.files(d.in, pattern = "*.micro.rarefied.rds")){
+  micro.r <- paste0(d.in, "/", i) %>% 
+    readRDS() %>% 
+    rownames_to_column("NGS_ID") %>% 
+    bind_rows(micro.r, .)
+}
+
+micro.r <- column_to_rownames(micro.r, "NGS_ID")
+micro.r[is.na(micro.r)] <- 0
+
+
+tax <- NULL
+
+for (i in list.files(d.in, pattern = "*.tax.rds")){
+ tax <- paste0(d.in, "/", i) %>% 
+    readRDS() %>% 
+    bind_rows(tax, .)
+}
+tax <- tax %>% unique()
+```
+
+# Check data
+
+```{r}
+identical(micro.r %>% colnames, micro %>% colnames)
+identical(micro.r %>% rownames, micro %>% rownames)
+identical(micro %>% rownames, pheno %>% pull(NGS_ID))
+identical(micro %>% colnames, tax %>% pull(ASV))
+```
+
+
+# Get distances
+
+```{r}
+micro.dis <- micro.r %>%
+  vegdist("bray")
+```
+
+# Save
+```{r}
+"all.micro.rds" %>% 
+  paste0(d.out, "/", .) %>% 
+  saveRDS(micro, .)
+"all.micro.r.rds" %>% 
+  paste0(d.out, "/", .) %>% 
+  saveRDS(micro.r, .)
+"all.tax.rds" %>% 
+  paste0(d.out, "/", .) %>% 
+  saveRDS(tax, .)
+"all.pheno.rds" %>% 
+  paste0(d.out, "/", .) %>% 
+  saveRDS(pheno, .)
+"all.micro.dis.rds" %>% 
+  paste0(d.out, "/", .) %>% 
+  saveRDS(micro.dis, .)
+```
+
+
+# Session information
+
+```{r}
+sessionInfo()
+```

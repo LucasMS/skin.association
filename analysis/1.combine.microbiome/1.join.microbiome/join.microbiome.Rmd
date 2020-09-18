@@ -1,0 +1,445 @@
+---
+title: "Join microbiome"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+# Introduction
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+scale_fill_discrete <- function(...) {
+  scale_fill_manual(..., values = cbp1)
+}
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbp1)
+}
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(phyloseq)
+library(vegan)
+```
+
+## Import data
+```{r}
+dic <- "~/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
+  read.delim(stringsAsFactors = F) %>% 
+  mutate(Description = Displayed.description)
+
+pop.folder <- "~/IKMB/projects/skin.associations/results/popgen/1.full.set/2.get.diversity/" 
+kora.folder <- "~/IKMB/projects/skin.associations/results/kora/1.full.set/2.get.diversity/"
+
+
+# Read tax
+
+pop.tax <- "~/IKMB/projects/skin.associations/popgen/results/2.combine.metadata.microbiome/tax.rds" %>% 
+  readRDS()
+
+kora.tax <- "~/IKMB/projects/skin.associations/kora/results/2.combine.metadata.microbiome/all.tax.rds" %>% 
+  readRDS()
+
+#Read pop data
+
+pop.pheno <- NULL
+for (i in list.files(pop.folder, "i[1-9].pheno.rds")){
+  pop.pheno <- bind_rows(pop.pheno,
+                         paste0(pop.folder,"/",i) %>% 
+                           readRDS() %>% 
+                           mutate(Site = case_when(i %>% str_sub(2,2) == "1" ~ "Antecubital fossa",
+                                                   i %>% str_sub(2,2) == "2" ~ "Volar forearm",
+                                                    i %>% str_sub(2,2) == "3" ~ "Dorsal forearm",
+                                                    i %>% str_sub(2,2) == "4" ~ "Forehead")))
+}
+pop.pheno <- pop.pheno %>% select(NGS_ID, Participant_ID, Site, everything())
+
+pop.micro <- NULL
+for (i in list.files(pop.folder, "i[1-9].micro.rds")){
+  pop.micro <- bind_rows(pop.micro,
+                         paste0(pop.folder,"/",i) %>% 
+                           readRDS() %>% 
+                           rownames_to_column("NGS_ID"))
+}
+pop.micro <- pop.micro %>% column_to_rownames("NGS_ID")
+pop.micro[is.na(pop.micro)] <- 0
+
+
+#Read kora data
+
+kora.pheno <- NULL
+for (i in list.files(kora.folder, "i[1-9].pheno.rds")){
+  kora.pheno <- bind_rows(kora.pheno,
+                         paste0(kora.folder,"/",i) %>% 
+                           readRDS() %>% 
+                           mutate(Site = case_when(i %>% str_sub(2,2) == "1" ~ "Antecubital fossa",
+                                                   i %>% str_sub(2,2) == "2" ~ "Retroauricular fold")))
+}
+kora.pheno <- kora.pheno %>% select(NGS_ID, Participant_ID, Site, everything())
+
+kora.micro <- NULL
+for (i in list.files(kora.folder, "i[1-9].micro.rds")){
+  kora.micro <- bind_rows(kora.micro,
+                         paste0(kora.folder,"/",i) %>% 
+                           readRDS() %>% 
+                           rownames_to_column("NGS_ID"))
+}
+kora.micro <- kora.micro %>% column_to_rownames("NGS_ID")
+kora.micro[is.na(kora.micro)] <- 0
+
+```
+
+# Make function to format data to phyloseq
+
+
+```{r}
+get.phyloseq <- function(micro, tax){
+  
+
+  ## Re-order columns of tax
+  
+  tax <- tax %>%
+    right_join(data.frame(ASV = colnames(micro)), by = "ASV") 
+  
+  identical(tax$ASV, colnames(micro)) %>% 
+    print()
+  
+  tax <- tax %>% 
+    remove_rownames() %>% 
+    select(Kingdom, Phylum, Class, Order, Family, Genus, Species, seqs) %>% 
+    column_to_rownames("seqs")
+    
+  colnames(micro) <- rownames(tax)
+  
+  ## Check compatibility
+  
+  identical(colnames(micro), rownames(tax))
+  
+  # Convert to phyloseq format
+  
+  
+  tax.ps <- tax_table(tax %>% as.matrix())
+  micro.ps <- otu_table(micro, taxa_are_rows = F)
+  
+  # Combine data into a single object
+  
+  ps <- phyloseq(tax_table(tax.ps),  
+                 otu_table(micro.ps, taxa_are_rows = F))
+  return(ps)
+}
+
+```
+
+# Transform in phyloseq
+
+## Kora
+```{r}
+kora.ps <- get.phyloseq(kora.micro, kora.tax)
+```
+
+## Pop
+
+```{r}
+pop.ps <- get.phyloseq(pop.micro, pop.tax)
+```
+
+# Join them
+
+```{r}
+comb.ps <- merge_phyloseq(kora.ps,pop.ps)
+```
+
+# Get out of phyloseq
+
+
+```{r}
+comb.micro <- comb.ps %>% 
+  otu_table() %>% 
+  data.frame()
+comb.tax <- comb.ps %>% 
+  tax_table() %>% 
+  data.frame(stringsAsFactors = F)
+```
+
+# Format comb.tax
+
+```{r}
+comb.tax <- comb.tax %>%
+  rownames_to_column("seqs") %>% 
+  mutate(ASV = 1:nrow(.) %>% 
+           paste0("ASV", .)) %>% 
+  select(-seqs, seqs)
+```
+
+# Format ASVs 
+So ASVs combined will be ASV
+
+```{r}
+kora.tax.min <- kora.tax %>% 
+  rename("ASVk" = "ASV") %>% 
+  select(seqs, ASVk)
+
+pop.tax.min <- pop.tax %>% 
+  rename("ASVp" = "ASV") %>% 
+  select(seqs, ASVp)
+
+comb.tax <- comb.tax %>% 
+  left_join(kora.tax.min, by = "seqs") %>% 
+  left_join(pop.tax.min, by = "seqs")
+```
+
+
+# Format com.micro
+
+```{r}
+identical(colnames(comb.micro), comb.tax$seqs)
+colnames(comb.micro) <- comb.tax$ASV 
+identical(colnames(comb.micro), comb.tax$ASV)
+```
+
+# Sync with metadata
+
+## Select variables that are common
+
+```{r}
+dic <- dic %>% 
+  rename("uDescription" = "Description",
+         "varname" = "Variable") %>% 
+  bind_rows(data.frame(Cohort = c(rep("KORA FF4",2),rep("PopGen",2)),
+                       uDescription = rep(c("NGS_ID", "Participant_ID"),2),
+                       varname = rep(c("NGS_ID", "Participant_ID"),2)))
+common.variables <- dic %>%
+  group_by(uDescription) %>% 
+  mutate(n = n()) %>% 
+  filter(n == 2) %>% 
+  arrange(uDescription) %>% 
+  ungroup
+```
+
+## Standardize kora meta and dic
+```{r}
+# Select variables to consider
+in.kora.dic <- dic %>% 
+  filter(Cohort == "KORA FF4" ) %>% 
+  inner_join(common.variables %>% filter(Cohort == "KORA FF4") %>% select(varname), by = "varname")
+in.kora.pheno <- kora.pheno %>% 
+  select(match((in.kora.dic %>% pull(varname)), colnames(.)))
+identical(colnames(in.kora.pheno), in.kora.dic$varname)
+#Edit dic and meta
+in.kora.dic <- in.kora.dic %>% 
+  mutate(varname = uDescription %>% make.names(unique = T)) %>% 
+  mutate(Description = uDescription) %>% 
+  select(varname, Group,Description)
+colnames(in.kora.pheno) <- in.kora.dic$varname
+identical(colnames(in.kora.pheno), in.kora.dic$varname)
+```
+
+## Standardize pop meta and dic
+```{r}
+# Select variables to consider
+in.pop.dic <- dic %>% 
+  filter(Cohort == "PopGen" ) %>% 
+  inner_join(common.variables %>% filter(Cohort == "PopGen") %>% select(varname), by = "varname")
+in.pop.pheno <- pop.pheno %>% 
+  select(match((in.pop.dic %>% pull(varname)), colnames(.)))
+identical(colnames(in.pop.pheno), in.pop.dic$varname)
+#Edit dic and meta
+in.pop.dic <- in.pop.dic %>% 
+  mutate(varname = uDescription %>% make.names(unique = T)) %>% 
+  mutate(Description = uDescription) %>% 
+  select(varname, Group,Description)
+colnames(in.pop.pheno) <- in.pop.dic$varname
+identical(colnames(in.pop.pheno), in.pop.dic$varname)
+```
+
+## Join phenotypic data
+
+```{r}
+comb.pheno <- bind_rows(in.kora.pheno %>% 
+                          mutate(Cohort = "KORA FF4"),
+                        in.pop.pheno %>% 
+                          mutate(Cohort = "PopGen")) %>% 
+  group_by(Cohort)
+```
+
+
+# Sync meta with micro
+
+```{r}
+comb.pheno <- comb.micro %>% 
+  rownames_to_column("NGS_ID") %>% 
+  select(NGS_ID) %>% 
+  left_join(comb.pheno, by = "NGS_ID")
+```
+
+
+## Overview of the data
+
+```{r}
+for (i in setdiff(colnames(comb.pheno), c("NGS_ID", "Participant_ID"))){
+  
+  if(is.numeric(comb.pheno[,i])){
+    g <- ggplot(comb.pheno, aes_string(x = i)) +
+      geom_histogram() + 
+      facet_wrap(~Cohort) +
+      labs(title = i)}else{
+        g <- ggplot(comb.pheno, aes_string(x = i)) +
+          geom_bar() + 
+          facet_wrap(~Cohort)  +
+          labs(title = i)}
+  print(g)
+}
+```
+
+
+## Check if data fits
+
+```{r}
+identical(rownames(comb.micro), comb.pheno$NGS_ID) 
+identical(colnames(comb.micro), comb.tax$ASV) 
+```
+
+
+# Make micro rarefied
+
+# Micro rarefied
+```{r}
+min.count <- 5000
+micro.r <- rrarefy(comb.micro, min.count) %>% 
+  data.frame()
+micro.r <-  micro.r[, colSums(micro.r) > 0]
+```
+
+# Create master tax
+
+This will include all ASVs from the pop and kora
+
+## Creat unique taxonomy
+
+```{r}
+tax.unique <- bind_rows(pop.tax %>% select(-ASV),
+                        kora.tax %>% select(-ASV)) %>% 
+  filter(!duplicated(seqs))
+```
+## Join the ASV names
+
+```{r}
+anti.kora.tax <- anti_join(kora.tax %>% 
+                             select(ASV, seqs) %>% 
+                             rename("ASVk" = "ASV"), 
+                           comb.tax %>% select(seqs),
+                           by = "seqs")
+anti.pop.tax <- anti_join(pop.tax %>% 
+                             select(ASV, seqs) %>% 
+                            rename("ASVp" = "ASV"),
+                          comb.tax %>%  select(seqs),
+                           by = "seqs")
+anti.tax <- full_join(anti.kora.tax, anti.pop.tax, by = "seqs")
+
+#Add ASV count
+
+anti.tax <- anti.tax %>% 
+  mutate(ASV = 1:nrow(anti.tax) + nrow(comb.tax),
+         ASV = paste0("ASV", ASV)) %>% 
+  #add taxonomy
+  left_join(tax.unique, by = "seqs")
+
+```
+
+## Master tax
+
+```{r}
+master.tax <-bind_rows(comb.tax,
+                       anti.tax)
+(duplicated(master.tax$seqs) %>% sum) == 0
+```
+
+
+# Write outputs
+
+```{r}
+"meta.rds" %>%
+  paste0(d.out, "/", .) %>% 
+  saveRDS(comb.pheno, . )
+
+"micro.rds" %>%
+  paste0(d.out, "/", .) %>% 
+  saveRDS(comb.micro, .)
+
+"micro.r.rds" %>%
+  paste0(d.out, "/", .) %>% 
+  saveRDS(micro.r, .)
+
+"tax.rds" %>%
+  paste0(d.out, "/", .) %>% 
+  saveRDS(comb.tax, .)
+
+"master.tax.rds" %>%
+  paste0(d.out, "/", .) %>% 
+  saveRDS(master.tax, .)
+```
+
+
+# Conclusion
+
+# Session information
+
+```{r}
+sessionInfo()
+```

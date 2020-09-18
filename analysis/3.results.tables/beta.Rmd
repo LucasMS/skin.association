@@ -1,0 +1,197 @@
+---
+title: "Grab results from beta"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+scale_fill_discrete <- function(...) {
+  scale_fill_manual(..., values = cbp1)
+}
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbp1)
+}
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+
+```
+
+
+# Import function
+```{r}
+import.data <- function(dic, input.file, cohort, test.batch){
+  df <- input.file %>% 
+    readRDS() %>%
+    mutate(Cohort = cohort) %>%
+    mutate(Test.batch = test.batch) %>% 
+    left_join(dic %>% filter(Cohort == cohort) %>% 
+                select(Variable, Cohort, Group, Description), by = c("term" = "Variable", "Cohort")) %>% 
+    rename("Sig." = "selection" ) %>% 
+    select(-term, -index) %>% 
+    arrange(Site, padj) %>% 
+    select(Test.batch, Cohort, Group, Description, Site, padj, `Sig.`, everything())
+  if(cohort == "KORA FF4"){df <- df %>% 
+    mutate(Site = Site %>% as.character,
+           Site = if_else(Site == "Behind ear",
+                          "Retroauricular fold",
+                          Site))}
+  return(df)}
+
+```
+
+
+# Popgen host trait set
+
+```{r}
+dic <- "~/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
+  read_tsv %>%
+  mutate(Displayed.description = if_else(Variable == "t1922_antibiotics_6_weeks",
+                                         "Antibiotics (<6-8w)",
+                                         Displayed.description)) %>% 
+  mutate(Description = Displayed.description) %>% 
+  select(Variable, Cohort, Group, Description) %>% 
+  filter(Cohort == "PopGen")
+
+input.file <- "~/IKMB/projects/skin.associations/results/popgen/2.host.trait.set/3.test.beta/beta.joined.rds"
+cohort <- "PopGen"
+test.batch <- "Age/BMI/Sex/Lifestyle"
+
+pop.all <- import.data(dic, input.file, cohort, test.batch)
+```
+
+
+
+# Kora host trait set
+
+
+```{r}
+dic <- "~/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
+  read_tsv %>%
+  mutate(Displayed.description = if_else(Variable == "Ddytkantbtitl2m.u3sf_01",
+                                         "Antibiotics (<6-8w)",
+                                         Displayed.description)) %>% 
+  mutate(Description = Displayed.description) %>%
+  select(Variable, Cohort, Group, Description) %>% 
+  filter(Cohort == "KORA FF4")
+
+
+input.file <- "~/IKMB/projects/skin.associations/results/kora/2.host.trait.set/3.test.beta/beta.joined.rds"
+cohort <- "KORA FF4"
+test.batch <- "Age/BMI/Sex/Lifestyle"
+
+kora.pop <- import.data(dic, input.file, cohort, test.batch)
+
+```
+
+# Popgen skin physiology set
+
+```{r}
+dic <- "~/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
+  read_tsv %>%
+  mutate(Description = Displayed.description) %>% 
+  select(Variable, Cohort, Group, Description) %>% 
+  filter(Cohort == "PopGen")
+
+input.file <- "~/IKMB/projects/skin.associations/results/popgen/3.physio.set/3.test.beta/beta.joined.rds"
+cohort <- "PopGen"
+test.batch <- "Skin physio"
+
+
+pop.tewl <- import.data(dic, input.file, cohort, test.batch)
+```
+
+# kora environemnt set
+
+```{r}
+
+dic <- "~/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
+  read_tsv %>%
+  mutate(Description = Displayed.description) %>% 
+  filter(Cohort == "KORA FF4") %>% 
+  select(Variable, Cohort, Group, Description)
+
+
+input.file <- "~/IKMB/projects/skin.associations/results/kora/3.env.set/3.test.beta/beta.joined.rds"
+cohort <- "KORA FF4"
+test.batch <- "Environment"
+
+kora.env <- import.data(dic, input.file, cohort, test.batch)
+
+```
+
+
+```{r}
+beta <- bind_rows(pop.all,
+                  kora.pop,
+                  pop.tewl,
+                  kora.env)
+```
+
+```{r}
+"beta.tsv" %>% 
+  paste0(d.out, "/",.) %>% 
+  write_tsv(beta, .)
+```
+
+# Session information
+
+```{r}
+sessionInfo()
+```

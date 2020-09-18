@@ -1,0 +1,244 @@
+---
+title: "Filter metadata"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+# Introduction
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+scale_fill_discrete <- function(...) {
+  scale_fill_manual(..., values = cbp1)
+}
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbp1)
+}
+
+# count function
+Count <- function(x){return(plyr::count(x))}
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(finalfit)
+library(janitor)
+library(ICC)
+library(vcd)
+library(DataExplorer)
+```
+
+## Import data
+```{r}
+d.in <- "/home/lsilva/IKMB/projects/skin.associations/results/popgen/1.full.set/1.filter.samples.and.metadata"
+meta <- "pheno.all.gold.rds" %>%
+  paste0(d.in, "/", .) %>%
+  readRDS()
+micro <- "micro.all.gold.rds" %>%
+  paste0(d.in, "/", .) %>%
+  readRDS()
+tax <- "tax.all.gold.rds" %>%
+  paste0(d.in, "/", .) %>%
+  readRDS()
+meta.dic <- "pheno.dic.all.gold.rds" %>%
+  paste0(d.in, "/", .) %>%
+  readRDS()
+```
+
+
+# Introduction
+
+I will filter the microbiome and the metadata to have a small, **GOLD**, selected set of samples where phenotype data is complete.
+
+# Keep only data of the set
+Also remove redundant
+```{r}
+
+pheno <- meta %>%
+  select(NGS_ID,
+         Participant_ID,
+         wash,
+         cream,
+         Site,
+         GJ,
+         ZA,
+         ZB,
+         ZE,
+         ZF,
+         ZK,
+         t14498_smoking_habits_6m,
+         t1922_antibiotics_6_weeks,
+         t1774_antibiotics_6_month,
+         t14110_gender,
+         t4_examination_age,
+         t277_BMI,
+         sport_s,
+         reg_sports)
+# Sync
+pheno.dic <- meta.dic %>% 
+  right_join(data.frame(varname = pheno %>% colnames),
+             by = "varname")
+# confirming
+identical(pheno %>% colnames, pheno.dic$varname)
+
+missing_plot(pheno)
+```
+
+# Remove remaining participants with NA's
+## Estimate NA by participant
+
+```{r}
+ind.nas <- rowSums(is.na(pheno)) %>%
+  data.frame(na.count = .) %>%
+  bind_cols(select(pheno, NGS_ID))
+```
+
+## View
+```{r}
+ind.nas %>%
+  arrange(desc(na.count)) %>%
+  mutate(NGS_ID = factor(NGS_ID, levels = unique(NGS_ID))) %>%
+  ggplot(., aes(x = NGS_ID, y = na.count)) +
+  geom_bar(stat = "identity") +
+  theme_linedraw()+
+  ggpubr::rotate_x_text()+
+  geom_hline(yintercept = 10)
+```
+
+## Remove
+
+```{r}
+pheno <- pheno %>% 
+  left_join(ind.nas, by = "NGS_ID") %>% 
+  filter(na.count == 0) %>% 
+  select(-na.count)
+missing_plot(pheno)
+```
+
+# Remove variables that became constant
+```{r}
+pheno.gold <- remove_constant(pheno)
+```
+
+##Check removal
+```{r}
+dim(pheno)
+missing_plot(pheno.gold)
+```
+
+# Check and update other dataframes
+### Check resulting dimensions
+```{r}
+dim(pheno.gold)
+```
+
+
+### Get dictionary
+```{r}
+pheno.gold.dic <- colnames(pheno.gold) %>%
+  data.frame(varname = .) %>%
+  left_join(pheno.dic, by = "varname")
+```
+
+## Keep microbiome data of selected samples
+
+## Select participants
+```{r}
+micro.gold <- micro[match(pheno.gold$NGS_ID, rownames(micro)),]
+identical(pheno.gold$NGS_ID, rownames(micro.gold))
+```
+
+
+## Select ASVs that are not empty
+```{r}
+micro.gold <- micro.gold[,colSums(micro.gold) > 0]
+```
+
+## Match tax
+
+```{r}
+tax.gold <- colnames(micro.gold) %>%
+  data.frame(ASV = .) %>%
+  left_join(tax, by = "ASV")
+identical(colnames(micro.gold), tax.gold$ASV)
+```
+
+# Save outputs
+
+Gold
+
+```{r}
+"pheno.all.gold.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(pheno.gold, .)
+"micro.all.gold.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(micro.gold, .)
+"tax.all.gold.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(tax.gold, .)
+"pheno.dic.all.gold.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(pheno.gold.dic, .)
+```
+
+# Session information
+
+```{r}
+sessionInfo()
+```
+

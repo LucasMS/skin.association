@@ -1,0 +1,163 @@
+---
+title: "Make summary table"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+# Introduction
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 1, width = 120, qwraps2_markup = "markdown")
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+scale_fill_discrete <- function(...) {
+  scale_fill_manual(..., values = cbp1)
+}
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbp1)
+}
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(qwraps2)
+```
+
+## Import data
+```{r}
+
+
+dic <- "/home/lsilva/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
+  read.delim(stringsAsFactors = F) %>% 
+  filter(Cohort == "KORA FF4")
+
+kora.data.folder <- "~/IKMB/projects/skin.associations/results/kora/3.env.set"
+
+# get data folder
+kora.folder <- paste0(kora.data.folder, "/", "1.filter.samples.and.metadata/")
+
+# Read kora data
+fin <- data.frame(index = c("i1","i2"), Site = c("Antecubital fossa","Retroauricular fold"))
+
+
+kora.pheno <- NULL
+for (i in 1:nrow(fin)){
+  kora.pheno <- paste0(kora.data.folder, "/2.get.diversity/",
+                       fin$index[i],
+                       ".pheno.rds") %>% 
+    readRDS() %>% 
+    mutate(Site = fin$Site[i]) %>% 
+    bind_rows(kora.pheno,.)
+}
+
+kora.dic.values <- "pheno.dic.values.all.gold.rds" %>% 
+  paste0(kora.folder, "/", .) %>% 
+  readRDS(.)
+
+```
+
+
+# Make table
+
+## Participant data
+```{r, results="asis"}
+`KORA FF4` <- kora.pheno %>% 
+  select(-Site, -cream, -wash, -NGS_ID) %>% 
+  unique()
+
+our_summary1 <- list(
+  "Age/BMI/Sex" = list("Age (years)" = ~ qwraps2::median_iqr(.data$Agetothedeadlin.u3talter, digits = 0),
+                       "Sex:female" = ~ n_perc0(.data$gender.u3csex == "female"),
+                       "BMI" = ~ qwraps2::median_iqr(.data$BMI.u3tbmi, digits = 0)),
+  "Education/Dwelling" = list("Highest vocational qualification (Hvq):no degree/vocational school/teaching" = ~ n_perc0(.data$HVQvfS4sLTBERUF.u3tberufb == "12"),
+                              "Hvq:technical school/technical/master" = ~ n_perc0(.data$HVQvfS4sLTBERUF.u3tberufb == "3"),
+                              "Hvq:engineering school/polytechnic/college/university" = ~ n_perc0(.data$HVQvfS4sLTBERUF.u3tberufb == "45"),
+                              "Cohabiting couple:yes (single, living alone/married, separated/divorced/widowed)" = ~ n_perc0(.data$marital.status.u3tfamstd == "1456"),
+                              "Cohabiting couple:no (living together with partner/married, living together)" = ~ n_perc0(.data$marital.status.u3tfamstd == "23"),
+                              "Location:city (city of Augsburg)" = ~ n_perc0(.data$LBoGRIfGDD31201.u3tortgc == "1"),
+                              "Location:rural (administrative district of Augsburg/Aichach-Friedberg)" = ~ n_perc0(.data$LBoGRIfGDD31201.u3tortgc == "2")),
+  "Hours outdoors" = list("In summer (per week)" = ~ median_iqr(.data$HmhaddysoaoecwsgMisdh.u3s_t2a),
+                          "In summer (per weekend)" = ~ median_iqr(.data$StrdySndyinsmdh.u3s_t2c),
+                          "In winter (per week)" = ~ median_iqr(.data$MndyFrdyinwntdh.u3s_t2b),
+                          "In winter (per weekend)" = ~ median_iqr(.data$StrdySndyinwndh.u3s_t2d)),
+  "Free time outdoors" = list("Beach/lake" = ~ n_perc0(.data$WdysmoyftoowodoBL.u3s_t4a1 == "1"),
+                              "Green spaces" = ~ n_perc0(.data$green.spaces.u3s_t4a2 == "1"),
+                              "Mountain region" = ~ n_perc0(.data$mountain.region.u3s_t4a4 == "1"),
+                              "Urban spaces" = ~ n_perc0(.data$Urban.spaces.u3s_t4a3 == "1")),
+  "Holidays outdoors" = list("Beach/lake" = ~ n_perc0(.data$onholidaybechlk.u3s_t4b1 == "1"),
+                             "Green spaces" = ~ n_perc0(.data$green.spaces.u3s_t4b2 == "1"),
+                             "Mountain region" = ~ n_perc0(.data$mountain.region.u3s_t4b4 == "1"),
+                             "Urban spaces" = ~ n_perc0(.data$Urban.spaces.u3s_t4b3 == "1")),
+  "Pets" = list("Animal contact:no (not pet owner/never/occasionally)" = ~ n_perc0(.data$IydnhyopDyhcwoppsafofm.u3s_u3 == "012"),
+                "Animal contact:yes (regular or pet owner)" = ~ n_perc0(.data$IydnhyopDyhcwoppsafofm.u3s_u3 == "34"),
+                "Cat" = ~ n_perc0(.data$Cat.u3s_u1b == "1"),
+                "Dog" = ~ n_perc0(.data$IfyeswhichonDog.u3s_u1a == "1"),
+                "Rodent" = ~ n_perc0(.data$Rodent.u3s_u1d == "1"),
+                "Other" = ~ n_perc0(.data$Other.u3s_u1e == "1")),
+  "UV protection" = list("Sun protection in summer:always" = ~ n_perc0(.data$Hodyusiasiscsis.u3s_t3a == "1"),
+                         "Sun protection in summer:mostly" = ~ n_perc0(.data$Hodyusiasiscsis.u3s_t3a == "2"),
+                         "Sun protection in summer:sometimes" = ~ n_perc0(.data$Hodyusiasiscsis.u3s_t3a == "3"),
+                         "Sun protection in summer:rare/never" = ~ n_perc0(.data$Hodyusiasiscsis.u3s_t3a == "45")))
+
+whole <- summary_table(`KORA FF4`, our_summary1)
+
+whole
+```
+
+```{r}
+sessionInfo()
+```

@@ -1,0 +1,268 @@
+---
+title: "Make summary table"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+# Introduction
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 1, width = 120, qwraps2_markup = "markdown")
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+scale_fill_discrete <- function(...) {
+  scale_fill_manual(..., values = cbp1)
+}
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbp1)
+}
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(qwraps2)
+```
+
+## Import data
+```{r}
+dic <- "/home/lsilva/IKMB/projects/skin.associations/results/analysis/2.summary.tables/1.host.trait.set/variables.kora.pop.tsv" %>% 
+  read.delim(stringsAsFactors = F)
+
+pop.data.folder <- "/home/lsilva/IKMB/projects/skin.associations/results/popgen/2.host.trait.set"
+kora.data.folder <- "/home/lsilva/IKMB/projects/skin.associations/results/kora/2.host.trait.set"
+
+# get data folder
+pop.folder <- paste0(pop.data.folder, "/", "1.filter.samples.and.metadata")
+kora.folder <- paste0(kora.data.folder, "/", "1.filter.samples.and.metadata")
+
+#Read pop data
+fin <- data.frame(index = c("i1","i2","i3", "i4"), Site = c("Antecubital fossa","Volar forearm", "Dorsal forearm",  "Forehead"))
+
+
+pop.pheno <- NULL
+for (i in 1:nrow(fin)){
+  pop.pheno <- paste0(pop.data.folder, "/2.get.diversity/",
+                      fin$index[i],
+                      ".pheno.rds") %>% 
+    readRDS() %>% 
+    mutate(Site = fin$Site[i]) %>% 
+    bind_rows(pop.pheno,.)
+}
+
+
+# Read kora data
+#Read pop data
+fin <- data.frame(index = c("i1","i2"), Site = c("Antecubital fossa","Retroauricular fold"))
+
+
+kora.pheno <- NULL
+for (i in 1:nrow(fin)){
+  kora.pheno <- paste0(kora.data.folder, "/2.get.diversity/",
+                       fin$index[i],
+                       ".pheno.rds") %>% 
+    readRDS() %>% 
+    mutate(Site = fin$Site[i]) %>% 
+    bind_rows(kora.pheno,.)
+}
+kora.dic.values <- "pheno.dic.values.all.gold.rds" %>% 
+  paste0(kora.folder, "/", .) %>% 
+  readRDS(.)
+```
+
+# Get common table
+
+# Sync with metadata
+
+## Select variables that are common
+
+```{r}
+dic <- dic %>% 
+  # NEW feature!!!
+  bind_rows(data.frame(Variable = rep("Participant_ID",2), 
+                       Displayed.description = rep("Participant_ID",2),
+                       Variable = rep("Participant_ID",2),
+                       Cohort = c("KORA FF4", "PopGen"))) %>% 
+  rename("uDescription" = "Displayed.description",
+         "varname" = "Variable")
+
+common.variables <- dic %>%
+  group_by(uDescription) %>% 
+  mutate(n = n()) %>% 
+  arrange(uDescription) %>% 
+  ungroup
+```
+
+## Standardize kora meta and dic
+This is necessary because names in each phenotype datasets are cohort-specific.
+```{r}
+# Select variables to consider
+in.kora.dic <- dic %>% 
+  filter(Cohort == "KORA FF4" ) %>% 
+  inner_join(common.variables %>%
+               filter(Cohort == "KORA FF4") %>%
+               select(varname), by = "varname")
+
+in.kora.pheno <- kora.pheno %>% 
+  select(match((in.kora.dic %>% pull(varname)), colnames(.)))
+
+identical(colnames(in.kora.pheno), in.kora.dic$varname)
+
+#Edit dic and meta
+in.kora.dic <- in.kora.dic %>% 
+  mutate(varname = uDescription %>% make.names(unique = T)) %>% 
+  mutate(Description = uDescription) %>% 
+  select(varname, Group,Description)
+colnames(in.kora.pheno) <- in.kora.dic$varname
+
+identical(colnames(in.kora.pheno), in.kora.dic$varname)
+```
+
+## Standardize pop meta and dic
+This is necessary because names in each phenotype datasets are cohort-specific.
+```{r}
+# Select variables to consider
+in.pop.dic <- dic %>% 
+  filter(Cohort == "PopGen" ) %>% 
+  inner_join(common.variables %>% 
+               filter(Cohort == "PopGen") %>% 
+               select(varname), by = "varname")
+
+in.pop.pheno <- pop.pheno %>% 
+  select(match((in.pop.dic %>% pull(varname)), colnames(.)))
+
+identical(colnames(in.pop.pheno), in.pop.dic$varname)
+
+#Edit dic and meta
+in.pop.dic <- in.pop.dic %>% 
+  mutate(varname = uDescription %>% make.names(unique = T)) %>% 
+  mutate(Description = uDescription) %>% 
+  select(varname, Group,Description)
+colnames(in.pop.pheno) <- in.pop.dic$varname
+
+identical(colnames(in.pop.pheno), in.pop.dic$varname)
+```
+
+## Join phenotypic data
+
+```{r}
+comb.pheno <- bind_rows(in.kora.pheno %>% 
+                          mutate(Cohort = "KORA FF4"), 
+                        #Keep only samples that are antecubital fossa
+                        #filter(Site  == "Antecubital fossa"),
+                        in.pop.pheno %>% 
+                          mutate(Cohort = "PopGen")) %>% 
+  group_by(Cohort) %>% 
+  # Add new name of the Site
+  mutate(Site = if_else(Site == "Behind ear",
+                        "Retroauricular fold",
+                        Site)) %>% 
+  #update names of wash and lotion
+  rename("Wash" = "Wash...24h.",
+         "Lotion" = "Lotion.cream...24h.") %>% 
+  mutate(Antibiotics...6m. = if_else(is.na(Antibiotics...6m.),
+                                     "NA",
+                                     Antibiotics...6m.),
+         Sport.in.summer..h.week. = if_else(is.na(Sport.in.summer..h.week.),
+                                            0,
+                                            Sport.in.summer..h.week.),
+         Regular.sports = if_else(is.na(Regular.sports),
+                                  0L,
+                                  Regular.sports)) %>% 
+  mutate(Sex = str_to_sentence(Sex))
+
+```
+
+# Make table
+
+## Participant data
+```{r, results="asis"}
+comb.pheno.participant <- comb.pheno %>% 
+  select(-Site, -Wash, -Lotion) %>% 
+  unique() %>% 
+  mutate()
+
+our_summary1 <- list(
+  "Age/BMI/Sex" = list("Age (years)" = ~ qwraps2::median_iqr(.data$Age..y., digits = 0),
+                       "Sex:female" = ~ n_perc0(.data$Sex == "Female"),
+                       "BMI" = ~ qwraps2::median_iqr(.data$BMI..kg.m2., digits = 0)),
+  "Diet" = list("Carbohydrate (g/d)" = ~ qwraps2::median_iqr(.data$Carbohydrate..g.d., digits = 0),
+                "Energy (kcal/d)" = ~ qwraps2::median_iqr(.data$Energy..kcal.d., digits = 0),
+                "Fat (g/d)" = ~ qwraps2::median_iqr(.data$Fat..g.d., digits = 0),
+                "Fiber (g/d)" = ~ qwraps2::median_iqr(.data$Fiber..g.d., digits = 0),
+                "Protein (g/d)" = ~ qwraps2::median_iqr(.data$Protein..g.d., digits = 0)),
+  "Systemic antibiotics" = list("Antibiotics (< 6-8w):yes" = ~ n_perc0(.data$Antibiotics...6.8w. == "yes"),
+                                "Antibiotics (< 6m)*:do not know" = ~ n_perc0(.data$Antibiotics...6m. == "do not know"),
+                                "Antibiotics (< 6m)*:no" = ~ n_perc0(.data$Antibiotics...6m. == "no"),
+                                "Antibiotics (< 6m)*:yes" = ~ n_perc0(.data$Antibiotics...6m. == "yes")),
+  "Smoking" = list("Smoking:ex-smoker" = ~ n_perc0(.data$Smoking %in% c("Ex-smoker", "ex smoker")),
+                   "Smoking:non-smoker" = ~ n_perc0(.data$Smoking %in% c("never smoked", "Non-smoker")),
+                   "Smoking:smoker" = ~ n_perc0(.data$Smoking %in% c("smoker", "Smoker"))),
+  "Alcohol consumption" = list("Alcohol (g/d)" = ~ qwraps2::median_iqr(.data$Alcohol..g.d., digits = 0)),
+  "Physical activity" = list("Regular sports*" = ~ n_perc0(.data$Regular.sports == "1"),
+                             "Sport in summer (h)*" = ~ qwraps2::median_iqr(.data$Sport.in.summer..h.week.)))
+
+
+whole <- summary_table(comb.pheno.participant, our_summary1)
+#print(whole, markup = "latex")
+whole
+```
+
+# Session information
+
+```{r}
+sessionInfo()
+```

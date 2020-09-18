@@ -1,0 +1,148 @@
+---
+title: "Gather alpha"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      code: hide
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "/home/lsilva/IKMB/projects/skin.associations/results/popgen/3.physio.set/3.test.beta"
+---
+
+
+# Introduction
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 6,
+               fig.width = 5 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+scale_fill_discrete <- function(...) {
+   scale_fill_manual(..., values = cbp1)
+}
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbp1)
+}
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(gtsummary)
+```
+
+## Index
+
+```{r}
+index <- data.frame(index = c("1", "2", "3", "4"),
+                    Site = c("Antecubital fossa",
+                             "Volar forearm", 
+                             "Dorsal forearm",
+                             "Forehead"))
+```
+
+
+## Import data
+```{r}
+d.in <- d.out
+
+# beta
+f.in <- list.files(d.in) %>% 
+  data.frame(f = .) %>%
+  filter(str_detect(f, "beta.final.res.tsv")) %>% 
+  mutate(index = str_sub(f, 2,2)) %>% 
+  mutate(f = paste0(d.in, "/", f)) %>% 
+  inner_join(index, by = "index")
+
+beta <- NULL
+for (i in 1:nrow(f.in)){
+  beta <- read.delim(f.in$f[i]) %>% 
+    mutate(index = f.in$index[i],
+           Site = f.in$Site[i]) %>% 
+    bind_rows(beta, .)
+}
+rm(f.in, index, ts, ts.chao1, ts.invsimp)
+```
+
+
+
+# Edit coefs
+
+# Save originals
+```{r}
+"beta.joined.rds" %>% 
+  paste0(d.out, "/",.) %>% 
+  saveRDS(beta,.)
+```
+
+
+
+```{r}
+beta <- beta %>%
+  filter(selection == "y")
+```
+
+
+# Save filtered
+```{r}
+"beta.filtered.rds" %>% 
+  paste0(d.out, "/",.) %>% 
+  saveRDS(beta,.)
+```
+
+
+
+
+# Conclusion
+
+# Session information
+
+```{r}
+sessionInfo()
+```

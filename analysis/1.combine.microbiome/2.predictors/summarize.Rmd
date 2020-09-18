@@ -1,0 +1,256 @@
+---
+title: "Prediction of microenvironments"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      df_print: paged
+      self_contained: true
+      code_download: true
+      code_folding: hide
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 5,
+               fig.width = 4 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 14))
+
+# Set seed for reproducibility
+set.seed(13)
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r, echo= F, message=F, warning=F}
+library(ggplot2)
+library(tidyverse)
+library(ggpubr)
+library(vegan)
+library(reshape2)
+library(GGally)
+library(RColorBrewer)
+library(stats) # for mad
+library(ggpubr)
+library(pROC)
+library(gridExtra)
+
+```
+
+## Import data
+```{r}
+d.in <- "~/IKMB/projects/skin.associations/results/analysis/1.combine.microbiome/2.predictors/variable.selection/"
+micro.r <- "~/IKMB/projects/skin.associations/results/analysis/1.combine.microbiome/1.join.microbiome/micro.r.rds" %>% 
+  readRDS()
+
+tax <- "~/IKMB/projects/skin.associations/results/analysis/1.combine.microbiome/1.join.microbiome/tax.rds" %>% 
+  readRDS()
+
+pheno <- "~/IKMB/projects/skin.associations/results/analysis/1.combine.microbiome/1.join.microbiome/meta.rds" %>% 
+  readRDS()
+
+microenv <- "~/IKMB/projects/skin.associations/scripts/data.dic/skin.microenv.tsv" %>% 
+  read_tsv()
+
+```
+
+# Set number of repetitions done
+```{r}
+n.rep <- 100
+```
+
+
+# Read all files
+
+```{r, warning=F}
+files <- list.files(path = d.in,
+                    pattern = ".rds") %>%
+  paste0(d.in, "/", .)
+
+final.res <- NULL
+selected <- NULL
+for (i in files){
+  # get results
+  final.res.internal <- readRDS(i) %>%
+    .[["global.res"]]
+  # Add them all to final results
+  final.res <- bind_rows(final.res.internal, final.res)
+  # clean internal files
+  rm(final.res.internal)
+  
+  # Get number of repetitions
+  n.rep <- readRDS(i) %>%
+    .[["global.res"]] %>% 
+    pull(n.rep) %>% 
+    unique()
+  
+  rm(n.rep)
+  
+}
+
+```
+
+
+# Did everything run?
+
+```{r}
+final.res %>% 
+  count(variables) %>% 
+  filter(n != 100) %>% 
+  arrange(n)
+```
+Everything run as expected.
+
+# Get median of repeated measured
+```{r}
+final.res.sum <- final.res %>%
+  group_by(variables) %>%
+  summarise(auc = median(metric.1, na.rm = T),
+            auc.mad = mad(metric.1, na.rm = T),
+            mcc = median(metric.2, na.rm = T),
+            mcc.mad = mad(metric.2, na.rm = T),
+            accuracy = median(metric.4, na.rm = T),
+            accuracy.mad = mad(metric.4, na.rm = T),
+            completed.eval = n(),
+            number.of.variables = median(number.of.variables, na.rm = T),
+            number.of.variables.mad = mad(number.of.variables,  na.rm = T)) %>% 
+  ungroup() %>% 
+  mutate(variables = gsub("all variables", "All", variables))
+```
+# Make figures for the paper
+## Function
+```{r}
+
+plot.roc.curves <- function(){
+  # Import files --------------
+  
+  files <- list.files(path = d.in,
+                      pattern = ".rds") %>%
+    paste0(d.in, "/", .)
+  
+  
+  final.res.to.roc <- NULL
+  for (i in files){
+    
+    # get results
+    list.temp <- readRDS(i)
+    final.res.internal <- list.temp %>%
+      .[["global.res"]]
+    
+    # Get roc curve for all
+    eval <- list.temp %>% .[["eval.all"]] %>% .[["prediction"]]
+    roc.c <- roc(response = eval$response,
+                 predictor = eval %>% select(-response, -pred) %>% .[,1])
+    eval.all <- data.frame(Sensitivity=roc.c$sensitivities,
+                           Specificity=roc.c$specificities) %>% 
+      mutate(variables = "All")
+    eval <- eval.all
+    # Make final data frame
+    df <- data.frame(eval,
+                     n.rep = final.res.internal$n.rep%>% unique())
+    
+    # Add them all to final results
+    final.res.to.roc <- bind_rows(final.res.to.roc, df)
+  }
+  
+  # Get data for plot  ----- 
+  # Get values to annotate
+  annotation <- final.res.sum %>% 
+    mutate(AUC = paste0(round(auc,3), "±",
+                        round(auc.mad,3))) %>% 
+    mutate(MCC = paste0(round(mcc,3), "±",
+                        round(mcc.mad,3))) %>% 
+    select(variables, AUC, MCC) %>% 
+    rename("ASVs" = "variables") %>% 
+    t() %>% 
+    data.frame() %>% 
+    magrittr::set_colnames(c("Genera (>1%)")) %>%
+    rownames_to_column(" ") %>% 
+    select(` `, everything()) %>% 
+    #Remove first row, with names
+    .[-1,1:2]
+  
+  # Select all values
+  to.plot.shades <- final.res.to.roc %>%
+    group_by(n.rep)%>% 
+    rename("Traits" = "variables")
+  
+  # Select median values
+  to.plot.median <- final.res.to.roc %>%
+    group_by(n.rep) %>% 
+    mutate(feature.number = 1:n()) %>% 
+    group_by(variables, feature.number) %>% 
+    summarise(Specificity = median(Specificity), 
+              Sensitivity = median(Sensitivity)) %>% 
+    rename("Traits" = "variables")
+  
+  # Plot -----
+  g <- ggplot(to.plot.shades, aes(x = 1 - Specificity, y = Sensitivity)) +
+    geom_path(data = to.plot.shades %>% 
+                filter( Traits == "All"),
+              color = "darkgrey", alpha = 0.8) +
+    geom_path(data = to.plot.median, size =1.5) +
+    geom_abline(intercept = 0) +
+    annotation_custom(tableGrob(annotation,
+                                rows=NULL,
+                                theme=ttheme_minimal(base_size = 10)),
+                      xmin=0.5,
+                      xmax=1,
+                      ymin=0,
+                      ymax=0.3)
+  print(g)}
+```
+## Main 1: Classification of microenvironment
+```{r, message=F, warning=F}
+g1 <- plot.roc.curves()
+```
+
+# Save graph
+
+```{r}
+"g.auc.rds" %>% 
+  paste0(d.out, "/", .) %>% 
+  saveRDS(g1, .)
+```
+
+
+# Session information
+
+```{r}
+sessionInfo()
+```

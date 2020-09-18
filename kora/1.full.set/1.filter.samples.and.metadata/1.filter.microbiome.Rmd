@@ -1,0 +1,146 @@
+---
+title: "Filter microbiome data"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+output:
+   BiocStyle::html_document:
+      toc: true
+      df_print: paged
+      self_contained: true
+      code_download: true
+      highlight: tango
+#bibliography: mylib.bib
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 5,
+               fig.width = 4 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+library("rmarkdown")
+
+# Pretty outputs
+library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+theme_set(theme_few(base_size = 18))
+
+# Set seed for reproducibility
+set.seed(222)
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(DataExplorer)
+```
+
+## Import data
+```{r}
+d.in <- "/home/lsilva/IKMB/projects/skin.associations/kora/results/2.combine.metadata.microbiome/"
+meta <- "samples.meta.rds" %>%
+  paste0(d.in, "/",. ) %>%
+  readRDS()
+micro <- "samples.micro.rds" %>%
+  paste0(d.in, "/",. ) %>%
+  readRDS()
+tax <- "samples.tax.rds" %>%
+  paste0(d.in, "/",. ) %>%
+  readRDS()
+meta.dic <- "all.dic.rds" %>%
+  paste0(d.in, "/",. ) %>%
+  readRDS()
+meta.dic.values <- "all.dic.values.rds" %>%
+  paste0(d.in, "/",. ) %>%
+  readRDS()
+```
+
+# Introduction
+
+I will filter the microbiome data to keep only samples with minimum sequencing depth of 10,000 sequences.
+
+# Set minimal sequencing depth for microbiome data
+
+## Microbiome table
+
+### Remove samples with low depth
+```{r}
+dim(micro)
+micro <- micro[rowSums(micro) > 10000,]
+dim(micro)
+```
+
+### Remove possibly empty ASVs
+
+```{r}
+micro <- micro[,colSums(micro) > 0]
+```
+
+## Update the other tables
+
+### Meta
+```{r}
+meta <- rownames(micro) %>%
+  data.frame(NGS_ID = ., stringsAsFactors = F) %>%
+  left_join(meta)
+```
+
+### Tax
+
+```{r}
+tax <- colnames(micro) %>%
+  data.frame(ASV = ., stringsAsFactors = F) %>%
+  left_join(tax)
+```
+
+
+```{r}
+"samples.meta.f.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(meta, .)
+"samples.micro.f.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(micro, .)
+"samples.tax.f.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(tax, .)
+"samples.meta.dic.f.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(meta.dic, .)
+"samples.meta.dic.values.f.rds" %>%
+  paste0(d.out, "/", .) %>%
+  saveRDS(meta.dic.values, .)
+```
+
+
+# Session information
+
+```{r}
+sessionInfo()
+```
