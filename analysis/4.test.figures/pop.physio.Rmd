@@ -247,6 +247,11 @@ asvs.per.site <- to.plot %>%
   mutate(Microenvironment = if_else(Microenvironment == "Sebaceous",
                                     "Seb.",
                                     Microenvironment)) %>% 
+    mutate(Description = case_when(Description == "Skin type Fitzpatrick" ~ 
+                                   "Skin type\n(Fitzpatrick scale)",
+                                 Description == "Transepidermal water loss" ~
+                                   "TEWL",
+                                 TRUE ~ Description)) %>% 
   group_by(Description, Site, Group, Microenvironment) %>% count()
 
 g1.1 <- asvs.per.site %>% 
@@ -327,15 +332,14 @@ g12
 
 ```{r, fig.width=14, fig.height=14}
 to.plot.selected <- to.plot %>% 
-  filter(Genus %in% c("Staphylococcus", "Corynebacterium", "Paracoccus")) %>%
-  mutate(Species = str_replace(Species, "Staphylococcus", "S.")) %>% 
+  filter(Genus %in% c("Corynebacterium", "Enhydrobacter", "Kocuria")) %>%
+  mutate(Species = str_replace(Species, "Enhydrobacter", "E.")) %>% 
+  mutate(Species = str_replace(Species, "Kocuria", "K.")) %>% 
   mutate(Species = str_replace(Species, "Corynebacterium", "C.")) %>% 
-  mutate(Species = str_replace(Species, "Paracoccus", "P.")) %>% 
-  mutate(Species = str_replace(Species, "Lactobacillus", "L.")) %>% 
   mutate(Species = paste(Species, ASV)) %>% 
   mutate(Genus = abbreviate(Genus, minlength = 4, dot = T)) %>% 
-  mutate(Description = case_when(Description == "Skin type (Fitzpatrick)" ~ 
-                                   "Skin type\n(Fitzpatrick)",
+  mutate(Description = case_when(Description == "Skin type Fitzpatrick" ~ 
+                                   "Skin type\n(Fitzpatrick scale)",
                                  Description == "Transepidermal water loss" ~
                                    "TEWL",
                                  TRUE ~ Description))
