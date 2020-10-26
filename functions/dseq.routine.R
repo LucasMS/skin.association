@@ -8,7 +8,7 @@ dseq.routine <- function(f.full, f.null){
   
   if(pheno %>% pull(i) %>% is.character()){
     contrast <- c(i, pheno %>% pull(i) %>% unique() %>% sort() %>%  tail(2))
-    res <- results(dds,  contrast = contrast, alpha = 0.05)
+    res <- results(dds,  contrast = contrast, independentFiltering = F)
     res <- lfcShrink(dds,
                      res = res,
                      contrast = contrast,
@@ -17,7 +17,7 @@ dseq.routine <- function(f.full, f.null){
       rownames_to_column("ASV") %>% 
       mutate(coefficient = paste(contrast, collapse = "_"))
   }else{
-    res <- results(dds, name = i, alpha = 0.05)
+    res <- results(dds, name = i, independentFiltering = F)
     res <- lfcShrink(dds,
                      res = res,
                      coef =  resultsNames(dds) %>% tail(1),
