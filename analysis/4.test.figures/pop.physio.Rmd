@@ -332,51 +332,9 @@ associations <- to.plot %>%
 ```
 
 # Plot overview figure
-```{r, fig.width= 16, fig.height=7}
-g12 <- ggpubr::ggarrange(g1.1, g2, labels = "AUTO",  nrow = 2, heights = c(3,3))
+```{r, fig.width = 14, fig.height = 7}
+g12 <- ggpubr::ggarrange(g1.1, g2, labels = "AUTO",  ncol = 2, heights = c(3,3))
 g12
-```
-
-# Get ASV plots
-
-```{r, fig.width=14, fig.height=14}
-to.plot.selected <- to.plot %>% 
-  filter(Genus %in% c("Corynebacterium", "Enhydrobacter", "Kocuria")) %>%
-  mutate(Species = str_replace(Species, "Enhydrobacter", "E.")) %>% 
-  mutate(Species = str_replace(Species, "Kocuria", "K.")) %>% 
-  mutate(Species = str_replace(Species, "Corynebacterium", "C.")) %>% 
-  mutate(Species = paste(Species, ASV)) %>% 
-  mutate(Genus = abbreviate(Genus, minlength = 4, dot = T)) %>% 
-  mutate(Description = case_when(Description == "Skin type Fitzpatrick" ~ 
-                                   "Skin type\n(Fitzpatrick scale)",
-                                 Description == "Transepidermal water loss" ~
-                                   "TEWL",
-                                 TRUE ~ Description))
-
-
-
-g3 <- ggplot(to.plot.selected,
-             aes(x = value, y = Species, label = Species)) +
-  geom_vline(xintercept = 0, color="grey") +
-  geom_point(aes(color = Site,
-                 size = rel.abundance), alpha = 0.8) +
-  facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
-  labs(size = "Abun. (%)", x = "log2 fold change", y  = "ASVs") +
-  theme(legend.position = "bottom") +
-  guides(size=guide_legend(ncol=1), color = guide_legend(ncol=1), shape = guide_legend(ncol=1)) +
-  scale_color_manual(values = pal) +
-  scale_size_continuous(breaks=seq(0,max(to.plot.selected$rel.abundance), by= 1)) +
-  geom_errorbar(aes(xmin=value-se, xmax=value+se, color = Site),  width=.1)
-  
-
-g3
-
-
-```
-
-# Plot final figure
-```{r, fig.height = 10, fig.width = 12}
-ggpubr::ggarrange(g12, g3, labels = c("", "C"), ncol = 2, widths = c(1,1.6))
 ```
 
 # Session information

@@ -112,13 +112,7 @@ microenv <- "~/IKMB/projects/skin.associations/scripts/data.dic/skin.microenv.ts
 
 g.roc <- "~/IKMB/projects/skin.associations/results/analysis/1.combine.microbiome/2.predictors/g.auc.rds" %>% 
   readRDS()
-
-# Add sharedness
-gshare <- "~/IKMB/projects/skin.associations/results/analysis/1.combine.microbiome/0.sharedness/shared.rds" %>% 
-  readRDS()
 ```
-
-
 
 
 ## Convert info
@@ -282,15 +276,21 @@ g.mds
 
 
 # Add Roc plot
+```{r}
+g.roc
+```
 
 
 # Combine the plots
 
-```{r, fig.height=13, fig.width=13}
+```{r, fig.height=6, fig.width=16}
 
-gab <- ggpubr::ggarrange(g.tax, g.roc, ncol =2, labels = "AUTO", widths = c(1.5,1))
-gcd <- ggpubr::ggarrange(g.mds, gshare, ncol= 2, labels = c("C", "D"), widths = c(1, 0.8))
-ggpubr::ggarrange(gab,gcd, nrow = 2, heights = c(0.5,1))
+ggpubr::ggarrange(g.tax,
+                  g.roc,
+                  g.mds,
+                  ncol = 3,
+                  labels = "AUTO",
+                  widths = c(1,1,1))
 ```
 
 
