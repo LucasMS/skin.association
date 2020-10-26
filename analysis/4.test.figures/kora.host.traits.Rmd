@@ -174,7 +174,8 @@ g1
 # Process ASV
 
 ```{r}
-res <- deseq
+res <- deseq %>% 
+  filter(padj < 0.05)
 ```
 
 ## Join results
@@ -223,10 +224,19 @@ df <- df %>%
 
 
 ```{r}
-to.plot <- df %>% 
+p <- df %>% 
   select(sites$names, Phylum, Family, Genus, Species,seqs, ASV, Group, Description) %>% 
   melt(id.vars = c("Phylum", "Genus", "Family", "Species","seqs", "ASV", "Group", "Description")) %>% 
-  mutate(value = value %>% as.numeric()) %>% 
+  mutate(value = value %>% as.numeric())
+
+se <- df %>% 
+  select(paste0(sites$names, "_lfcSE"), Phylum, Family, Genus, Species,seqs, ASV, Group, Description) %>% 
+  melt(id.vars = c("Phylum", "Genus", "Family", "Species","seqs", "ASV", "Group", "Description")) %>% 
+  rename(se = value) %>% 
+  mutate(se = se %>% as.numeric()) %>% 
+  mutate(variable = str_replace(variable, "_lfcSE", ""))
+
+to.plot <- full_join(p,se, by = c("Phylum", "Genus", "Family", "Species", "seqs", "ASV", "Group", "Description", "variable"))  %>%
   rename("names" = "variable") %>% 
   left_join(sites, by = "names") %>% 
   left_join(microenv, by =  "Site") %>% 

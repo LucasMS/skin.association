@@ -136,7 +136,8 @@ beta
 # Process ASV
 
 ```{r}
-res <- deseq
+res <- deseq %>% 
+  filter(padj < 0.05)
 ```
 
 ## Join results 
@@ -194,10 +195,19 @@ df <- df %>%
 
 
 ```{r}
-to.plot <- df %>% 
+p <- df %>% 
   select(sites$names, Phylum, Family, Genus, Species,seqs, ASV, Group, Description) %>% 
   melt(id.vars = c("Phylum", "Genus", "Family", "Species","seqs", "ASV", "Group", "Description")) %>% 
-  mutate(value = value %>% as.numeric()) %>% 
+  mutate(value = value %>% as.numeric())
+
+se <- df %>% 
+  select(paste0(sites$names, "_lfcSE"), Phylum, Family, Genus, Species,seqs, ASV, Group, Description) %>% 
+  melt(id.vars = c("Phylum", "Genus", "Family", "Species","seqs", "ASV", "Group", "Description")) %>% 
+  rename(se = value) %>% 
+  mutate(se = se %>% as.numeric()) %>% 
+  mutate(variable = str_replace(variable, "_lfcSE", ""))
+
+to.plot <- full_join(p,se, by = c("Phylum", "Genus", "Family", "Species", "seqs", "ASV", "Group", "Description", "variable"))  %>%
   rename("names" = "variable") %>% 
   left_join(sites, by = "names") %>% 
   left_join(microenv, by =  "Site") %>% 
@@ -210,7 +220,6 @@ to.plot <- df %>%
   unique() %>% 
    mutate(Site = factor(Site,
                        levels = order.col))
-  
 ```
 
 # Count associations
@@ -350,14 +359,14 @@ g3 <- ggplot(to.plot.selected,
              aes(x = value, y = Species, label = Species)) +
   geom_vline(xintercept = 0, color="grey") +
   geom_point(aes(color = Site,
-                 size = rel.abundance,
-                 shape = Site), alpha = 0.7) +
+                 size = rel.abundance), alpha = 0.8) +
   facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
   labs(size = "Abun. (%)", x = "log2 fold change", y  = "ASVs") +
   theme(legend.position = "bottom") +
   guides(size=guide_legend(ncol=1), color = guide_legend(ncol=1), shape = guide_legend(ncol=1)) +
   scale_color_manual(values = pal) +
-  scale_size_continuous(breaks=seq(0,max(to.plot.selected$rel.abundance), by= 1))
+  scale_size_continuous(breaks=seq(0,max(to.plot.selected$rel.abundance), by= 1)) +
+  geom_errorbar(aes(xmin=value-se, xmax=value+se, color = Site),  width=.1)
   
 
 g3

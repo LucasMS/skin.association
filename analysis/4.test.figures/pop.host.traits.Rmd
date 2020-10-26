@@ -173,7 +173,8 @@ g1
 # Proess ASV
 
 ```{r}
-res <- deseq
+res <- deseq %>% 
+  filter(padj < 0.05)
 ```
 
 ## Join results
@@ -224,16 +225,25 @@ colnames(df.temp) <- c("seqs", "Group", "Description", sites$names[i],
 
 ```{r}
 df <- df %>%
-  left_join(tax %>% select(seqs, everything()), by = "seqs") 
+  left_join(tax %>% select(seqs, everything()), by = "seqs")
 ```
 
 ## Format
 
 ```{r}
-to.plot <- df %>% 
+p <- df %>% 
   select(sites$names, Phylum, Family, Genus, Species,seqs, ASV, Group, Description) %>% 
   melt(id.vars = c("Phylum", "Genus", "Family", "Species","seqs", "ASV", "Group", "Description")) %>% 
-  mutate(value = value %>% as.numeric()) %>% 
+  mutate(value = value %>% as.numeric())
+
+se <- df %>% 
+  select(paste0(sites$names, "_lfcSE"), Phylum, Family, Genus, Species,seqs, ASV, Group, Description) %>% 
+  melt(id.vars = c("Phylum", "Genus", "Family", "Species","seqs", "ASV", "Group", "Description")) %>% 
+  rename(se = value) %>% 
+  mutate(se = se %>% as.numeric()) %>% 
+  mutate(variable = str_replace(variable, "_lfcSE", ""))
+
+to.plot <- full_join(p,se, by = c("Phylum", "Genus", "Family", "Species", "seqs", "ASV", "Group", "Description", "variable"))  %>%
   rename("names" = "variable") %>% 
   left_join(sites, by = "names") %>% 
   left_join(microenv, by =  "Site") %>% 
@@ -370,7 +380,7 @@ g12
 
 ```{r, fig.width=16, fig.height=14}
 to.plot.selected <- to.plot %>% 
-  filter(Genus %in% c("Staphylococcus", "Corynebacterium", "Acinetobacter")) %>%
+ filter(Genus %in% c("Staphylococcus", "Corynebacterium", "Acinetobacter")) %>%
   mutate(Species = str_replace(Species, "Staphylococcus", "S.")) %>% 
   mutate(Species = str_replace(Species, "Corynebacterium", "C.")) %>% 
   mutate(Species = str_replace(Species, "Acinetobacter", "A.")) %>% 
@@ -390,15 +400,15 @@ g3.1 <- ggplot(this.plot,
                aes(x = value, y = Species, label = Species)) +
   geom_vline(xintercept = 0, color="grey") +
   geom_point(aes(color = Site, 
-                 size = rel.abundance,
-                 shape = Site), alpha = 0.9) +
+                 size = rel.abundance), alpha = 0.8) +
   facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
   labs(size = "Abun. (%)", x = "log2 fold change", y  = "ASVs") +
   theme(legend.position = "right") +
-  guides(size=guide_legend(ncol=1), color = guide_legend(ncol=1), shape = guide_legend(ncol=1)) +
+  guides(size=guide_legend(ncol=1), color = guide_legend(ncol=1)) +
   scale_color_manual(values = pal) +
   scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 2)) +
-  ggpubr::rotate_x_text(angle = 45)
+  ggpubr::rotate_x_text(angle = 45) +
+  geom_errorbar(aes(xmin=value-se, xmax=value+se, color = Site),  width=.1)
 
 
 this.plot <- to.plot.selected %>%
@@ -407,15 +417,16 @@ g3.2 <- ggplot(this.plot,
                aes(x = value, y = Species, label = Species)) +
   geom_vline(xintercept = 0, color="grey") +
   geom_point(aes(color = Site, 
-                 size = rel.abundance,
-                 shape = Site), alpha = 0.9) +
+                 size = rel.abundance), alpha = 0.8) +
   facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
   labs(size = "Abun. (%)", x = "log2 fold change", y  = "ASVs") +
   theme(legend.position = "right") +
-  guides(size=guide_legend(ncol=1), color = guide_legend(ncol=1), shape = guide_legend(ncol=1)) +
+  guides(size=guide_legend(ncol=1), color = guide_legend(ncol=1)) +
   scale_color_manual(values = pal) +
   scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 1)) +
-  ggpubr::rotate_x_text(angle = 45)
+  ggpubr::rotate_x_text(angle = 45) +
+  geom_errorbar(aes(xmin=value-se, xmax=value+se, color = Site),  width=.1)
+
 
 
 
@@ -440,15 +451,15 @@ g3.3 <- ggplot(this.plot,
                aes(x = value, y = Species, label = Species)) +
   geom_vline(xintercept = 0, color="grey") +
   geom_point(aes(color = Site, 
-                 size = rel.abundance,
-                 shape = Site), alpha = 0.9) +
+                 size = rel.abundance), alpha = 0.8) +
   facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
   labs(size = "Abun. (%)", x = "log2 fold change", y  = "ASVs") +
   theme(legend.position = "right") +
-  guides(size=guide_legend(ncol=1), color = guide_legend(ncol=1), shape = guide_legend(ncol=1)) +
+  guides(size=guide_legend(ncol=1), color = guide_legend(ncol=1)) +
   scale_color_manual(values = pal) +
   scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 1)) +
-  ggpubr::rotate_x_text(angle = 45)
+  ggpubr::rotate_x_text(angle = 45) +
+  geom_errorbar(aes(xmin=value-se, xmax=value+se, color = Site),  width=.1)
 g3.3
 ```
 

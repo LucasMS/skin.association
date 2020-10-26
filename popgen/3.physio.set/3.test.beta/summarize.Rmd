@@ -107,7 +107,7 @@ for (i in 1:nrow(f.in)){
            Site = f.in$Site[i]) %>% 
     bind_rows(beta, .)
 }
-rm(f.in, index, ts, ts.chao1, ts.invsimp)
+rm(f.in, index, ts)
 ```
 
 

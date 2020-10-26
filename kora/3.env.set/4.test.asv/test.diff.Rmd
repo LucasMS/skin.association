@@ -81,6 +81,8 @@ pheno <- paste0("i", index, ".","pheno.rds") %>%
 dic <- "~/IKMB/projects/skin.associations/scripts/data.dic/variables.kora.pop.tsv" %>% 
   read.delim(stringsAsFactors = ) %>% 
   filter(Cohort == "KORA FF4")
+#load functions
+source("~/IKMB/projects/skin.associations/scripts/functions/dseq.routine.R")
 ```
 
 
@@ -127,20 +129,34 @@ for (i in variables){
   f.null <- f.null.cha %>% 
     as.formula()
   
-  dds <- DESeqDataSetFromMatrix(countData = micro.t,
-                                colData = pheno,
-                                design = f.full)
-  dds <- DESeq(dds, reduced = f.null, test = "LRT", sfType = "poscounts")
+  ## Adjusted model
   
-  in.res <- results(dds, independentFiltering =F,  tidy =T) 
+  res.adj <- dseq.routine(f.full = f.full, f.null = f.null) 
   
-  in.res <- in.res %>%
-    rename( "row" = "ASV") %>%
+  ## Unadjusted model
+  
+  res.unadj <- dseq.routine(f.full = paste("~", i) %>% 
+                              as.formula(),
+                            f.null = ~ 1) 
+  
+  res.unadj <- res.unadj %>% 
+    select(-baseMean, -coefficient) %>% 
+    magrittr::set_colnames(paste0(colnames(.),"_unadj")) %>% 
+    dplyr::rename("ASV" = "ASV_unadj") 
+  
+  # Combine and wrap up
+  res.comb <- full_join(res.adj,
+                        res.unadj,
+                        by = c("ASV")) %>% mutate(sig = if_else(padj < 0.05,
+                                                                "yes",
+                                                                "no")) %>% 
     arrange(padj) %>%  
     mutate(term = i,
            full.formula = f.full.cha,
            null.formula = f.null.cha)
-  res <- bind_rows(res, in.res)
+  
+  
+  res <- bind_rows(res, res.comb)
   
 }
 

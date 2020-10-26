@@ -190,6 +190,49 @@ beta <- bind_rows(pop.all,
   write_tsv(beta, .)
 ```
 
+
+
+```{r}
+library(ggpubr)
+to.plot <- beta %>% 
+  mutate(padj_unadj = if_else(is.na(padj_unadj),1,padj_unadj)) %>% 
+  mutate(padj = if_else(is.na(padj),1,padj)) %>% 
+  mutate(R2_unadj = if_else(is.na(R2_unadj),1,R2_unadj) %>% abs) %>% 
+  mutate(R2 = if_else(is.na(R2),1,R2) %>% abs)
+
+a <- ggscatterhist(data = to.plot, 
+                   x = "padj_unadj",
+                   y ="padj", 
+                   alpha = 0.3, 
+                   xlab = "Adjusted P (no confounders)",
+                   ylab = "Adjusted P (w/ confounders)",
+                   margin.plot = "histogram")
+
+
+b <- ggscatter(data = to.plot, 
+               x = "R2_unadj",
+               y ="R2", 
+               alpha = 0.3, 
+               xlab = "R2 (no confounders)",
+               ylab = "R2 (w/ confounders)",
+               add = "reg.line",                                 # Add regression line
+               conf.int = TRUE,                                  # Add confidence interval
+               add.params = list(color = "blue",
+                                 fill = "lightgray")) +
+  stat_cor(method = "pearson", label.x = 0.01, label.y = 0.05)
+
+
+ggarrange(a,b, labels = "auto")
+
+beta %>% filter(padj <0.05) %>% nrow()
+beta %>% filter(padj_unadj < 0.05) %>% nrow()
+
+beta%>% filter(padj_unadj < 0.05) %>% pull(Description) %>% unique()
+
+```
+
+
+
 # Session information
 
 ```{r}

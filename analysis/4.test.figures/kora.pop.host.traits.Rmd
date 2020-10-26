@@ -102,7 +102,8 @@ pal <- c("#E69F00", "#56B4E9", "#009E73",
 # Process ASV
 
 ```{r}
-res <- deseq
+res <- deseq %>% 
+  filter(padj < 0.05)
 ```
 
 ## Join results
@@ -151,10 +152,19 @@ df <- df %>%
 
 
 ```{r}
-to.plot <- df %>% 
+p <- df %>% 
   select(sites$names, Phylum, Family, Genus, Species,seqs, ASV, Group, Description) %>% 
   melt(id.vars = c("Phylum", "Genus", "Family", "Species","seqs", "ASV", "Group", "Description")) %>% 
-  mutate(value = value %>% as.numeric()) %>% 
+  mutate(value = value %>% as.numeric())
+
+se <- df %>% 
+  select(paste0(sites$names, "_lfcSE"), Phylum, Family, Genus, Species,seqs, ASV, Group, Description) %>% 
+  melt(id.vars = c("Phylum", "Genus", "Family", "Species","seqs", "ASV", "Group", "Description")) %>% 
+  rename(se = value) %>% 
+  mutate(se = se %>% as.numeric()) %>% 
+  mutate(variable = str_replace(variable, "_lfcSE", ""))
+
+to.plot <- full_join(p,se, by = c("Phylum", "Genus", "Family", "Species", "seqs", "ASV", "Group", "Description", "variable")) %>% 
   rename("names" = "variable") %>% 
   left_join(sites, by = "names") %>% 
   left_join(microenv, by =  "Site") %>% 
@@ -210,8 +220,7 @@ g3.1 <- ggplot(this.plot,
                aes(x = value, y = ASV, label =ASV)) +
   geom_vline(xintercept = 0, color="grey") +
   geom_point(aes(color = Site, 
-                 size = rel.abundance,
-                 shape = Site), alpha = 0.9) +
+                 size = rel.abundance), alpha = 0.8) +
   facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
   labs(size = "Abun. (%)", x = "log2 fold change", y  = "ASVs") +
   theme(legend.position = "right") +
@@ -219,7 +228,8 @@ g3.1 <- ggplot(this.plot,
   scale_color_manual(values = pal) +
   scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 5)) +
   ggpubr::rotate_x_text(angle = 45) +
-  theme(strip.text.y.right = element_text(angle = 0))
+  theme(strip.text.y.right = element_text(angle = 0)) + 
+  geom_errorbar(aes(xmin=value-se, xmax=value+se, color = Site),  width=.1)
 
 this.plot <-   to.plot.selected %>% 
   filter(Group %in% c("Diet"))
@@ -227,8 +237,7 @@ g3.2 <- ggplot(this.plot,
                aes(x = value, y = ASV, label =ASV)) +
   geom_vline(xintercept = 0, color="grey") +
   geom_point(aes(color = Site, 
-                 size = rel.abundance,
-                 shape = Site), alpha = 0.9) +
+                 size = rel.abundance), alpha = 0.8) +
   facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
   labs(size = "Abun. (%)", x = "log2 fold change", y  = "ASVs") +
   theme(legend.position = "right") +
@@ -236,7 +245,8 @@ g3.2 <- ggplot(this.plot,
   scale_color_manual(values = pal) +
   scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 0.5)) +
   ggpubr::rotate_x_text(angle = 45) +
-  theme(strip.text.y.right = element_text(angle = 0))
+  theme(strip.text.y.right = element_text(angle = 0))  + 
+  geom_errorbar(aes(xmin=value-se, xmax=value+se, color = Site),  width=.1)
 
 
 this.plot <-   to.plot.selected %>% 
@@ -245,8 +255,7 @@ g3.3 <- ggplot(this.plot,
                aes(x = value, y = ASV, label =ASV)) +
   geom_vline(xintercept = 0, color="grey") +
   geom_point(aes(color = Site, 
-                 size = rel.abundance,
-                 shape = Site), alpha = 0.9) +
+                 size = rel.abundance), alpha = 0.8) +
   facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
   labs(size = "Abun. (%)", x = "log2 fold change", y  = "ASVs") +
   theme(legend.position = "right") +
@@ -254,7 +263,8 @@ g3.3 <- ggplot(this.plot,
   scale_color_manual(values = pal) +
   scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 0.5)) +
   ggpubr::rotate_x_text(angle = 45) +
-  theme(strip.text.y.right = element_text(angle = 0))
+  theme(strip.text.y.right = element_text(angle = 0))  + 
+  geom_errorbar(aes(xmin=value-se, xmax=value+se, color = Site),  width=.1)
 
 
 ggpubr::ggarrange(g3.1, g3.2, g3.3, labels = "AUTO", nrow = 3, heights = c(10, 8,6.5))

@@ -114,7 +114,7 @@ import.data <- function(tax, dic, d.master, cohort, test.batch){
       read.delim(f.in$f[i], stringsAsFactors = F) %>% 
       mutate(index = f.in$index[i]) %>% 
       rename(!!ASV.prefix := "ASV") %>% 
-      filter(padj <0.05) %>% 
+      #filter(padj <0.05) %>% 
       mutate(Cohort = cohort) %>% 
       # Add taxonomy
       left_join(tax, by = ASV.prefix) %>% 
@@ -248,7 +248,8 @@ kora.env <- import.data(tax, dic, d.master, cohort, test.batch)
 asv <- bind_rows(pop.all,
                  kora.pop,
                  pop.tewl,
-                 kora.env)
+                 kora.env) %>% 
+  select(-sig)
 ```
 
 ```{r}
@@ -256,6 +257,46 @@ asv <- bind_rows(pop.all,
   paste0(d.out, "/",.) %>% 
   write_tsv(asv, .)
 ```
+
+
+```{r}
+library(ggpubr)
+to.plot <- asv %>% 
+  mutate(padj_unadj = if_else(is.na(padj_unadj),1,padj_unadj)) %>% 
+  mutate(padj = if_else(is.na(padj),1,padj)) %>% 
+  mutate(log2FoldChange_unadj = if_else(is.na(log2FoldChange_unadj),1,log2FoldChange_unadj) %>% abs) %>% 
+  mutate(log2FoldChange = if_else(is.na(log2FoldChange),1,log2FoldChange) %>% abs)
+
+a <- ggscatterhist(data = to.plot, 
+              x = "padj_unadj",
+              y ="padj", 
+              alpha = 0.3, 
+              xlab = "Adjusted P (no confounders)",
+              ylab = "Adjusted P (w/ confounders)",
+              margin.plot = "histogram")
+
+
+b <- ggscatter(data = to.plot, 
+         x = "log2FoldChange_unadj",
+         y ="log2FoldChange", 
+         alpha = 0.3, 
+         xlab = "log2FoldChange (no confounders)",
+         ylab = "log2FoldChange (w/ confounders)",
+         add = "reg.line",                                 # Add regression line
+         conf.int = TRUE,                                  # Add confidence interval
+         add.params = list(color = "blue",
+                           fill = "lightgray")
+)+
+  stat_cor(method = "pearson", label.x = 3, label.y = 3)
+
+
+ggarrange(a,b, labels = "auto")
+
+
+asv %>% filter(padj <0.05) %>% nrow()
+asv %>% filter(padj_unadj <0.05) %>% nrow()
+```
+
 
 # Session information
 

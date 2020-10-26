@@ -116,11 +116,25 @@ microenv <- "~/IKMB/projects/skin.associations/scripts/data.dic/skin.microenv.ts
   read_tsv()
 ```
 
-
 ```{r}
 pheno <- pheno %>% 
   left_join(microenv, by = "Site")
 ```
+
+# Function
+
+```{r}
+#Adonis2 routine
+adonis.routine <- function(f){
+  res <- adonis2(f, data = pheno.test, permutations = 999, by = "terms", parallel = nc) %>%
+    data.frame() %>% 
+    rownames_to_column("x") %>% 
+    rename("p.value" =  "Pr..F.") %>% 
+    rename("term" = "x")  %>% 
+    filter(term == i) 
+  return(res)}
+```
+
 
 #Test variables on betadiversity.
 
@@ -186,12 +200,19 @@ for (i in c("Site", "Microenvironment")){
     f <- f.cha %>% 
       as.formula()
     
-    res <- adonis2(f, data = pheno.test, permutations = 999, by = "terms", parallel = nc) %>% 
-      data.frame() %>% 
-      rownames_to_column("x") %>% 
-      rename("p.value" =  "Pr..F.") %>% 
-      rename("term" = "x")  %>% 
-      filter(term == i) %>% 
+    ## Adjusted model
+    res.adj <- adonis.routine(f) %>% 
+      mutate(formula = f.cha) 
+    
+    ## Unadjusted model
+    res.unadj <- adonis.routine(paste("micro.dis", "~", i) %>% 
+                                  as.formula()) %>% 
+      select(-term, -Df) %>% 
+      magrittr::set_colnames(paste0(colnames(.),"_unadj"))
+    
+    
+    
+    res <- bind_cols(res.adj, res.unadj) %>% 
       mutate(formula = f.cha,
              nround = n.round,
              n = nrow(pheno.test),
@@ -209,13 +230,20 @@ summ <- res %>%
   group_by(term) %>% 
   mutate(sig = if_else(p.value < q,
                        1,
+                       0),
+         sig_unadj = if_else(p.value_unadj < q,
+                       1,
                        0)) %>% 
   summarize(significant.pc = sum(sig)*100/n.rep,
+            significant.pc_unadj = sum(sig_unadj)*100/n.rep,
             R2.avg = mean(R2),
             R2.sd = sd(R2),
+            R2.avg_unadj = mean(R2_unadj),
+            R2.sd_unadj = sd(R2_unadj),
             n.rep = n(),
             n.avg = mean(n),
             n.sd = sd(n))
+  
 
 summ
 ```
