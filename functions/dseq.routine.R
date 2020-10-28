@@ -7,7 +7,7 @@ dseq.routine <- function(f.full, f.null){
   dds <- DESeq(dds, sfType = "poscounts", reduced = f.null, test = "LRT", fitType = "parametric")
   
   if(pheno %>% pull(i) %>% is.character()){
-    contrast <- c(i, pheno %>% pull(i) %>% unique() %>% sort() %>%  tail(2))
+    contrast <- c(i, pheno %>% pull(i) %>% unique() %>% sort() %>%  tail(2) %>% rev())
     res <- results(dds,  contrast = contrast, independentFiltering = F)
     res <- lfcShrink(dds,
                      res = res,
