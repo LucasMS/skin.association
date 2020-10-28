@@ -283,7 +283,7 @@ g.roc
 
 # Combine the plots
 
-```{r, fig.height=6, fig.width=16}
+```{r, fig.height=6, fig.width=18}
 
 ggpubr::ggarrange(g.tax,
                   g.roc,

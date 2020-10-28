@@ -200,13 +200,19 @@ to.plot <- beta %>%
   mutate(R2_unadj = if_else(is.na(R2_unadj),1,R2_unadj) %>% abs) %>% 
   mutate(R2 = if_else(is.na(R2),1,R2) %>% abs)
 
-a <- ggscatterhist(data = to.plot, 
-                   x = "padj_unadj",
-                   y ="padj", 
-                   alpha = 0.3, 
-                   xlab = "Adjusted P (no confounders)",
-                   ylab = "Adjusted P (w/ confounders)",
-                   margin.plot = "histogram")
+
+pcount <- to.plot %>% mutate(sig.padj = if_else(padj < 0.05, "yes", "no"),
+                   sig.padj_unadj = if_else(padj_unadj < 0.05, "yes", "no")) %>% 
+  select(sig.padj, sig.padj_unadj, Description, Site) %>% 
+  reshape2::melt(id.vars = c("Description", "Site")) %>% 
+  filter(value == "yes") %>% 
+  count(variable, value)
+
+a <- ggplot(pcount, aes(variable, n))  +
+    geom_col() +
+  labs(y = "Total rejections", x = "Adjustment") +
+  scale_x_discrete(labels=c("sig.padj" = "With confounders",
+                            "sig.padj_unadj" = "No confounders"))
 
 
 b <- ggscatter(data = to.plot, 
@@ -219,11 +225,17 @@ b <- ggscatter(data = to.plot,
                conf.int = TRUE,                                  # Add confidence interval
                add.params = list(color = "blue",
                                  fill = "lightgray")) +
-  stat_cor(method = "pearson", label.x = 0.01, label.y = 0.05)
+  stat_cor(method = "pearson", label.x = 0.01, label.y = 0.05) +
+  stat_regline_equation(label.x = 0.01, label.y = 0.048)
 
 
-ggarrange(a,b, labels = "auto")
+g <- ggarrange(a,b, labels = "AUTO")
 
+g
+
+
+paste0(d.out, "/beta.plot.rds") %>% 
+saveRDS(g,.)
 beta %>% filter(padj <0.05) %>% nrow()
 beta %>% filter(padj_unadj < 0.05) %>% nrow()
 
