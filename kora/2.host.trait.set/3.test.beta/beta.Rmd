@@ -94,7 +94,7 @@ source("~/IKMB/projects/skin.associations/scripts/functions/adonis.routine.R")
 
 
 ```{r}
-controls <- c("gender.u3csex", "Agetothedeadlin.u3talter","BMI.u3tbmi", "wash", "cream")
+controls <- c("gender.u3csex", "Agetothedeadlin.u3talter","BMI.u3tbmi")
 energy <- "Energy.u3v_gcal"
 
 

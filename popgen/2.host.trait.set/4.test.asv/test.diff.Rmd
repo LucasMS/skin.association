@@ -94,7 +94,7 @@ micro.t <- t(micro) %>%
 ```
 
 ```{r}
-controls <- c("t14110_gender", "t4_examination_age", "t277_BMI","wash", "cream")
+controls <- c("t14110_gender", "t4_examination_age", "t277_BMI")
 energy <- "GJ"
 
 # Remove id variables

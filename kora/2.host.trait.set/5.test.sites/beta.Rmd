@@ -127,7 +127,7 @@ adonis.routine <- function(f){
 
 # Parameters of the test
 
-controls <- c("gender.u3csex", "Agetothedeadlin.u3talter", "BMI.u3tbmi" ,"wash", "cream")
+controls <- c("gender.u3csex", "Agetothedeadlin.u3talter", "BMI.u3tbmi" )
 
 # Set significance----
 
