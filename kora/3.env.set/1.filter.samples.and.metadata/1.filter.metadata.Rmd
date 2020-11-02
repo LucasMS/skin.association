@@ -153,9 +153,7 @@ pheno <- pheno %>%
          marital.status.u3tfamstd,
          HVQvfS4sLTBERUF.u3tberufb,
          LBoGRIfGDD31201.u3tortgc,
-         BMI.u3tbmi,
-         wash,
-         cream)
+         BMI.u3tbmi)
 pheno.dic <- pheno.dic %>% 
   filter(varname %in% c("NGS_ID",
                         "Participant_ID",
@@ -183,9 +181,7 @@ pheno.dic <- pheno.dic %>%
                         "marital.status.u3tfamstd",
                         "HVQvfS4sLTBERUF.u3tberufb",
                         "LBoGRIfGDD31201.u3tortgc",
-                        "BMI.u3tbmi",
-                        "wash",
-                        "cream"))
+                        "BMI.u3tbmi"))
 dim(pheno)
 ```
 

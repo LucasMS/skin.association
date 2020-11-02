@@ -116,7 +116,7 @@ kora.dic.values <- "pheno.dic.values.all.gold.rds" %>%
 ## Participant data
 ```{r, results="asis"}
 `KORA FF4` <- kora.pheno %>% 
-  select(-Site, -cream, -wash, -NGS_ID) %>% 
+  select(-Site, -NGS_ID) %>% 
   unique()
 
 our_summary1 <- list(

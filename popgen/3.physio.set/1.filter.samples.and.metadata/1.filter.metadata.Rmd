@@ -165,8 +165,6 @@ Also remove redundant
 pheno <- meta %>%
   select(NGS_ID,
          Participant_ID,
-         wash,
-         cream,
          Site,
          t14110_gender,
          t14520_Fitzpatrick_type,

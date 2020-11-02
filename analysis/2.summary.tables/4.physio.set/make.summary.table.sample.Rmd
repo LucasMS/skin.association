@@ -105,8 +105,6 @@ for (i in 1:nrow(fin)){
 ## Sample data
 ```{r, results="asis"}
 our_summary1 <- list(
-  "Skin care" = list("Wash (<24h)" = ~ n_perc0(.data$wash == "yes"),
-                     "Lotion/cream (<24h)" = ~ n_perc0(.data$cream == "yes")),
   "Transepidermal water loss (TEWL) measure" = list("TEWL" = ~ qwraps2::median_iqr(.data$TEWL_specific, digits = 2),
                                                     "pH" =  ~ qwraps2::median_iqr(.data$ph_specific, digits = 2),
                                                     "Air humidity (%)" = ~ qwraps2::median_iqr(.data$t14558_TEWL_humidity, digits = 2),
