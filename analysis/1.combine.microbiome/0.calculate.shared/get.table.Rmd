@@ -1,0 +1,394 @@
+---
+title: "Get table with shared sequences"
+author: "Lucas Moitinho-Silva"
+date: "`r Sys.Date()`"
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+
+# Introduction
+
+
+# Preparations
+
+## Set global options
+
+```{r style, echo = T, results="asis", cache=FALSE, message = F}
+#v.01
+# Set knit global options
+library("knitr")
+library("rmarkdown")
+library("kableExtra")
+
+# Set seed for reproducibility
+set.seed(13)
+# Color blind friendly pallet
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+scale_fill_discrete <- function(...) {
+   scale_fill_manual(..., values = cbp1)
+}
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbp1)
+}
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(lazyeval)
+library(xtable)
+```
+
+## Import data
+```{r}
+# Load data
+# KORA folder
+k.folder <- "~/IKMB/projects/skin.associations/results/kora/1.full.set/2.get.diversity/"
+i1.micro.rarefied_kora = readRDS(paste0(k.folder, "i1.micro.rarefied.rds"))
+i2.micro.rarefied_kora = readRDS(paste0(k.folder, "i2.micro.rarefied.rds"))
+i1.tax_kora = readRDS(paste0(k.folder, "i1.tax.rds"))
+i2.tax_kora = readRDS(paste0(k.folder, "i2.tax.rds"))
+
+
+# POPGEN folder
+p.folder <- "~/IKMB/projects/skin.associations/results/popgen/1.full.set/2.get.diversity/"
+i1.micro.rarefied_pop = readRDS(paste0(p.folder, "i1.micro.rarefied.rds"))
+i2.micro.rarefied_pop = readRDS(paste0(p.folder, "i2.micro.rarefied.rds"))
+i3.micro.rarefied_pop = readRDS(paste0(p.folder, "i3.micro.rarefied.rds"))
+i4.micro.rarefied_pop = readRDS(paste0(p.folder, "i4.micro.rarefied.rds"))
+i1.tax_pop = readRDS(paste0(p.folder, "i1.tax.rds"))
+i2.tax_pop = readRDS(paste0(p.folder, "i2.tax.rds"))
+i3.tax_pop = readRDS(paste0(p.folder, "i3.tax.rds"))
+i4.tax_pop = readRDS(paste0(p.folder, "i4.tax.rds"))
+
+#functions
+`%notin%` <- Negate(`%in%`) 
+
+#create a taxonomy table ot of the Kora and the Popgen sites
+tax <- bind_rows(i1.tax_kora, i2.tax_kora,
+                 i1.tax_pop, i2.tax_pop, 
+                 i3.tax_pop, i4.tax_pop) %>% 
+  dplyr::select(-ASV) %>% 
+  filter(!duplicated(seqs))
+
+
+#rename micro data
+pop_fossa_micro <- i1.micro.rarefied_pop %>% mutate(group = "Antecubital fossa (P)")
+pop_volar_micro <- i2.micro.rarefied_pop %>% mutate(group = "Volar forearm")
+pop_dosal_micro <- i3.micro.rarefied_pop %>% mutate(group = "Dosal forearm")
+pop_forehead_micro <- i4.micro.rarefied_pop %>% mutate(group = "Forehead")
+
+kora_fossa_micro <- i1.micro.rarefied_kora %>% mutate(group = "Antecubital fossa (K)")
+kora_ear_micro <- i2.micro.rarefied_kora %>% mutate(group = "Retroauricular fold")
+
+#replace ASV-colnames by sequences
+colnames(pop_fossa_micro) <- c(i1.tax_pop$seqs, "group")
+colnames(pop_volar_micro) <- c(i2.tax_pop$seqs, "group")
+colnames(pop_dosal_micro) <- c(i3.tax_pop$seqs, "group")
+colnames(pop_forehead_micro) <- c(i4.tax_pop$seqs, "group")
+colnames(kora_fossa_micro) <- c(i1.tax_kora$seqs, "group")
+colnames(kora_ear_micro) <- c(i2.tax_kora$seqs, "group")
+
+#create a table with the count information and group information
+all_micro <- pop_fossa_micro %>%
+  bind_rows(pop_volar_micro) %>%
+  bind_rows(pop_dosal_micro) %>%
+  bind_rows(pop_forehead_micro) %>%
+  bind_rows(kora_fossa_micro) %>%
+  bind_rows(kora_ear_micro)  %>%
+  dplyr::select(group, matches(".")) 
+
+#create new colnames, named ASV1, ASV2, ...
+old_colnames_all <-   c(colnames(all_micro)[2:dim(all_micro)[2]])
+data.table::setnames(all_micro, old = colnames(all_micro), 
+                     new = c("group",paste0( "ASV", 1:(dim(all_micro)[2]-1))))
+
+
+#function counting number of zeros per ASV
+zero_function <- function(group) {
+  zero <- matrix(nrow = dim(all_micro[
+    which(all_micro$group == group), ])[2], ncol = 1)
+  for (i in 1:dim(all_micro[
+    which(all_micro$group == group), ])[2]) {
+    zero[i,1] <- sum(all_micro[
+      which(all_micro$group == group), i] == 0)
+  }
+  return(zero)
+}
+
+#function computing the mean for each ASV per site
+mean_function <- function(group){
+  mean <- data.frame(unlist(sapply(all_micro[
+    which(all_micro$group == group), ], mean)))
+  return(mean)
+}
+
+#Zeros and means for each group 
+fossa_zero_popgen <- zero_function("Antecubital fossa (P)")
+volar_zero_popgen <- zero_function("Volar forearm")
+dosal_zero_popgen <- zero_function("Dosal forearm")
+forehead_zero_popgen <- zero_function("Forehead")
+fossa_zero_kora <- zero_function("Antecubital fossa (K)")
+ear_zero_kora <- zero_function("Retroauricular fold")
+
+fossa_mean_popgen <- mean_function("Antecubital fossa (P)")
+volar_mean_popgen <- mean_function("Volar forearm")
+dosal_mean_popgen <- mean_function("Dosal forearm")
+forehead_mean_popgen <- mean_function("Forehead")
+fossa_mean_kora <- mean_function("Antecubital fossa (K)")
+ear_mean_kora <- mean_function("Retroauricular fold")
+
+#table containing all means and zeros (for each site)
+summary_all <- data.frame(fossa_mean_popgen, volar_mean_popgen, 
+                                  dosal_mean_popgen, forehead_mean_popgen,
+                                  fossa_mean_kora, ear_mean_kora,
+                                  fossa_zero_popgen, volar_zero_popgen, 
+                                  dosal_zero_popgen, forehead_zero_popgen,
+                                  fossa_zero_kora, ear_zero_kora,
+                                  c(NA, old_colnames_all)) 
+
+colnames(summary_all) <- c("Antecubital fossa (P): Mean", 
+                                   "Volar forearm: Mean", 
+                                   "Dosal forearm: Mean", 
+                                   "Forehead: Mean", 
+                                   "Antecubital fossa (K): Mean",
+                                   "Retroauricular fold: Mean",
+                                   "Antecubital fossa (P): Zero", 
+                                   "Volar forearm: Zero", 
+                                   "Dosal forearm: Zero", 
+                                   "Forehead: Zero", 
+                                   "Antecubital fossa (K): Zero",
+                                   "Retroauricular fold: Zero",
+                                   "seqs")
+
+#check if there is an NA in the "zero-columns"
+#if yes, it means that the sequence is not avaliable for this site
+summary_all_final <- summary_all %>%
+  dplyr::mutate("Antecubital fossa (P): checked" = 
+                  ifelse(!is.na(`Antecubital fossa (P): Zero`), "1", "0")) %>%
+  dplyr::mutate("Volar forearm: checked" = 
+                  ifelse(!is.na(`Volar forearm: Zero`), "1", "0")) %>%
+  dplyr::mutate("Dosal forearm: checked" = 
+                  ifelse(!is.na(`Dosal forearm: Zero`), "1", "0")) %>%
+  dplyr::mutate("Forehead: checked" = 
+                  ifelse(!is.na(`Forehead: Zero`), "1", "0")) %>%
+  dplyr::mutate("Antecubital fossa (K): checked" = 
+                  ifelse(!is.na(`Antecubital fossa (K): Zero`), "1", "0")) %>%
+  dplyr::mutate("Retroauricular fold: checked" = 
+                  ifelse(!is.na(`Retroauricular fold: Zero`), "1", "0")) 
+  
+
+#function calculating the percentage of sequences in site one shared with site 
+#two
+shared_sequences <- function(checked_site_one, checked_site_two, mean_site_one){
+  shared <- summary_all_final %>%
+    slice(-1) %>%
+    filter_(lazyeval::interp(quote(x == 1  & y == 1), 
+                             x=as.name(checked_site_one), 
+                             y=as.name(checked_site_two))) %>%
+    select(as.name(mean_site_one)) %>%
+    sum()/5000
+  return(shared)
+}
+
+#site_one = Antecubital Fossa (K)-----------------------------------------------
+af_k_vs_rf_k <- shared_sequences("Antecubital fossa (K): checked", 
+                                 "Retroauricular fold: checked",
+                                 "Antecubital fossa (K): Mean")
+
+af_k_vs_af_p <- shared_sequences("Antecubital fossa (K): checked", 
+                                 "Antecubital fossa (P): checked",
+                                 "Antecubital fossa (K): Mean")
+
+af_k_vs_vf_p <- shared_sequences("Antecubital fossa (K): checked", 
+                                 "Volar forearm: checked",
+                                 "Antecubital fossa (K): Mean")
+
+af_k_vs_df_p <- shared_sequences("Antecubital fossa (K): checked", 
+                                 "Dosal forearm: checked",
+                                 "Antecubital fossa (K): Mean")
+
+af_k_vs_f_p <- shared_sequences("Antecubital fossa (K): checked", 
+                                "Forehead: checked",
+                                "Antecubital fossa (K): Mean")
+
+Antecubital_fossa_kora <- c(NA, af_k_vs_rf_k, af_k_vs_af_p, af_k_vs_vf_p, 
+                            af_k_vs_df_p, af_k_vs_f_p) 
+
+
+#site_one =  Retroauricular fold--------------------------------------------
+
+rf_k_vs_af_k <- shared_sequences("Retroauricular fold: checked",
+                                 "Antecubital fossa (K): checked", 
+                                 "Retroauricular fold: Mean")
+
+rf_k_vs_af_p <- shared_sequences("Retroauricular fold: checked",
+                                 "Antecubital fossa (P): checked", 
+                                 "Retroauricular fold: Mean")
+
+rf_k_vs_vf_p <- shared_sequences("Retroauricular fold: checked",
+                                 "Volar forearm: checked", 
+                                 "Retroauricular fold: Mean")
+
+rf_k_vs_df_p <- shared_sequences("Retroauricular fold: checked",
+                                 "Dosal forearm: checked", 
+                                 "Retroauricular fold: Mean")
+
+rf_k_vs_f_p <- shared_sequences("Retroauricular fold: checked",
+                                "Forehead: checked", 
+                                "Retroauricular fold: Mean")
+
+retroauricular_fold_kora <- c(rf_k_vs_af_k, NA,  rf_k_vs_af_p, rf_k_vs_vf_p, 
+                              rf_k_vs_df_p, rf_k_vs_f_p)
+
+#site_one =  Antecubital fossa (P)----------------------------------------------
+
+af_p_vs_af_k <- shared_sequences("Antecubital fossa (P): checked", 
+                                 "Antecubital fossa (K): checked",
+                                 "Antecubital fossa (P): Mean")
+
+af_p_vs_rf_k <- shared_sequences("Antecubital fossa (P): checked", 
+                                 "Retroauricular fold: checked",
+                                 "Antecubital fossa (P): Mean")
+
+af_p_vs_vf_p <- shared_sequences("Antecubital fossa (P): checked", 
+                                 "Volar forearm: checked",
+                                 "Antecubital fossa (P): Mean")
+
+af_p_vs_df_p <- shared_sequences("Antecubital fossa (P): checked", 
+                                 "Dosal forearm: checked",
+                                 "Antecubital fossa (P): Mean")
+
+af_p_vs_f_p <- shared_sequences("Antecubital fossa (P): checked", 
+                                "Forehead: checked",
+                                "Antecubital fossa (P): Mean")
+
+Antecubital_fossa_popgen <- c(af_p_vs_af_k, af_p_vs_rf_k, NA,  af_p_vs_vf_p, 
+                              af_p_vs_df_p, af_p_vs_f_p)
+
+
+#site_one = Volar forearm---------------------------------------------------
+
+vf_p_vs_af_k <- shared_sequences("Volar forearm: checked", 
+                                 "Antecubital fossa (K): checked",
+                                 "Volar forearm: Mean")
+
+vf_p_vs_rf_k <- shared_sequences("Volar forearm: checked", 
+                                 "Retroauricular fold: checked",
+                                 "Volar forearm: Mean")
+
+vf_p_vs_af_p <- shared_sequences("Volar forearm: checked", 
+                                 "Antecubital fossa (P): checked",
+                                 "Volar forearm: Mean")
+
+vf_p_vs_df_p <- shared_sequences("Volar forearm: checked", 
+                                 "Dosal forearm: checked",
+                                 "Volar forearm: Mean")
+
+vf_p_vs_f_p <- shared_sequences("Volar forearm: checked", 
+                                "Forehead: checked",
+                                "Volar forearm: Mean")
+
+volar_forearm_popgen <- c(vf_p_vs_af_k, vf_p_vs_rf_k, vf_p_vs_af_p, 
+                          NA, vf_p_vs_df_p, vf_p_vs_f_p)
+
+#site_one = Dosal forearm---------------------------------------------------
+
+df_p_vs_af_k <- shared_sequences("Dosal forearm: checked", 
+                                 "Antecubital fossa (K): checked",
+                                 "Dosal forearm: Mean")
+
+df_p_vs_rf_k <- shared_sequences("Dosal forearm: checked", 
+                                 "Retroauricular fold: checked",
+                                 "Dosal forearm: Mean")
+
+df_p_vs_af_p <- shared_sequences("Dosal forearm: checked", 
+                                 "Antecubital fossa (P): checked",
+                                 "Dosal forearm: Mean")
+
+df_p_vs_vf_p <- shared_sequences("Dosal forearm: checked", 
+                                 "Volar forearm: checked",
+                                 "Dosal forearm: Mean")
+
+df_p_vs_f_p <- shared_sequences("Dosal forearm: checked", 
+                                "Forehead: checked",
+                                "Dosal forearm: Mean")
+
+
+dosal_forearm_popgen <- c(df_p_vs_af_k, df_p_vs_rf_k, df_p_vs_af_p, 
+                          df_p_vs_vf_p, NA,  df_p_vs_f_p)
+
+#site_one = Forehead--------------------------------------------------------
+
+f_p_vs_af_k <- shared_sequences("Forehead: checked", 
+                                "Antecubital fossa (K): checked",
+                                "Forehead: Mean")
+
+f_p_vs_rf_k <- shared_sequences("Forehead: checked", 
+                                "Retroauricular fold: checked",
+                                "Forehead: Mean")
+
+f_p_vs_af_p <- shared_sequences("Forehead: checked", 
+                                "Antecubital fossa (P): checked",
+                                "Forehead: Mean")
+
+f_p_vs_vf_p <- shared_sequences("Forehead: checked", 
+                                "Volar forearm: checked",
+                                "Forehead: Mean")
+
+f_p_vs_df_p <- shared_sequences("Forehead: checked", 
+                                "Dosal forearm: checked",
+                                "Forehead: Mean")
+
+forehead_popgen <- c(f_p_vs_af_k, f_p_vs_rf_k, f_p_vs_af_p, 
+                     f_p_vs_vf_p, f_p_vs_df_p, NA)
+
+# Matrix with all the percentages of sequences in site one shared with site two
+proportions <- data.frame(c(Antecubital_fossa_kora, retroauricular_fold_kora, 
+                            Antecubital_fossa_popgen, volar_forearm_popgen, 
+                            dosal_forearm_popgen, forehead_popgen)) %>%
+  mutate(site_one = c(rep("Antecubital fossa (K)", 6),
+                      rep("Retroauricular fold", 6),
+                      rep("Antecubital fossa (P)", 6), 
+                      rep("Volar forearm", 6), 
+                      rep("Dosal forearm", 6), 
+                      rep("Forehead", 6))) %>%
+  mutate(site_two = rep(c("Antecubital fossa (K)",
+                          "Retroauricular fold",
+                          "Antecubital fossa (P)", 
+                          "Volar forearm", 
+                          "Dosal forearm", 
+                          "Forehead"), 6)) %>%
+  rename(proportion = 1) %>%
+  select(site_one, site_two, proportion) %>%
+  mutate(proportion = round(proportion * 100, digits = 2)) %>% 
+  filter(!is.na(proportion)) %>% 
+  rename("Reference site" = "site_one",
+         "Compared site" = "site_two",
+         "Sequences in reference\nsite shared with the\ncompared site (%)" = "proportion")
+```
+
+
+```{r}
+proportions %>% kable() %>%
+  kable_styling()
+```
+
+# Conclusion
+
+# Session information
+
+```{r}
+sessionInfo()
+```
