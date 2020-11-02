@@ -243,6 +243,14 @@ beta%>% filter(padj_unadj < 0.05) %>% pull(Description) %>% unique()
 
 ```
 
+```{r}
+beta %>% filter(Cohort == "PopGen", padj_unadj < 0.05) %>% 
+  ggplot(aes(x = Description, y = R2_unadj)) +
+  geom_col() +
+  facet_wrap(~ Site) +
+  ggpubr::rotate_x_text()
+```
+
 
 
 # Session information

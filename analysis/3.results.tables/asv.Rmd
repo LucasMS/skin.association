@@ -249,7 +249,8 @@ asv <- bind_rows(pop.all,
                  kora.pop,
                  pop.tewl,
                  kora.env) %>% 
-  select(-sig)
+  select(-sig) %>% 
+  mutate("contrast" = "coefficient")
 ```
 
 ```{r}
