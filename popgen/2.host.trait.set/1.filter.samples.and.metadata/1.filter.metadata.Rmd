@@ -122,7 +122,6 @@ pheno <- meta %>%
          ZK,
          t14498_smoking_habits_6m,
          t1922_antibiotics_6_weeks,
-         t1774_antibiotics_6_month,
          t14110_gender,
          t4_examination_age,
          t277_BMI,
