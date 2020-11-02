@@ -394,7 +394,7 @@ to.plot.selected <- to.plot %>%
 this.plot <- to.plot.selected %>%
   filter(Group %in% c("Age/BMI/Sex")) %>% 
   mutate(Description = if_else(Description == "Sex",
-                               "Sex (f:m)",
+                               "Sex (m:f)",
                                Description))
 g3.1 <- ggplot(this.plot,
                aes(x = value, y = Species, label = Species)) +
@@ -441,11 +441,17 @@ this.plot <- to.plot.selected %>%
   mutate(Description = if_else(Description == "Sport in summer (h/week)",
                                "Sport in summer\n(h/week)",
                                Description)) %>% 
+  mutate(Description = if_else(Description == "Regular sports",
+                               "Regular sports",
+                               Description)) %>% 
   mutate(Description = if_else(Description == "Lotion/cream (<24h)",
                                "Lotion/\ncream (<24h)",
                                Description)) %>% 
+    mutate(Description = if_else(Description == "Wash (<24h)",
+                               "Wash (<24h)",
+                               Description)) %>% 
   mutate(Description = if_else(Description == "Smoking",
-                               "Smoking\n(ex-:non-:smoker)",
+                               "Smoking\n(smoker:non-)",
                                Description))
 g3.3 <- ggplot(this.plot,
                aes(x = value, y = Species, label = Species)) +
