@@ -213,10 +213,7 @@ comb.pheno <- bind_rows(in.kora.pheno %>%
   #update names of wash and lotion
   rename("Wash" = "Wash...24h.",
          "Lotion" = "Lotion.cream...24h.") %>% 
-  mutate(Antibiotics...6m. = if_else(is.na(Antibiotics...6m.),
-                                     "NA",
-                                     Antibiotics...6m.),
-         Sport.in.summer..h.week. = if_else(is.na(Sport.in.summer..h.week.),
+  mutate(Sport.in.summer..h.week. = if_else(is.na(Sport.in.summer..h.week.),
                                             0,
                                             Sport.in.summer..h.week.),
          Regular.sports = if_else(is.na(Regular.sports),
@@ -244,10 +241,7 @@ our_summary1 <- list(
                 "Fat (g/d)" = ~ qwraps2::median_iqr(.data$Fat..g.d., digits = 0),
                 "Fiber (g/d)" = ~ qwraps2::median_iqr(.data$Fiber..g.d., digits = 0),
                 "Protein (g/d)" = ~ qwraps2::median_iqr(.data$Protein..g.d., digits = 0)),
-  "Systemic antibiotics" = list("Antibiotics (< 6-8w):yes" = ~ n_perc0(.data$Antibiotics...6.8w. == "yes"),
-                                "Antibiotics (< 6m)*:do not know" = ~ n_perc0(.data$Antibiotics...6m. == "do not know"),
-                                "Antibiotics (< 6m)*:no" = ~ n_perc0(.data$Antibiotics...6m. == "no"),
-                                "Antibiotics (< 6m)*:yes" = ~ n_perc0(.data$Antibiotics...6m. == "yes")),
+  "Systemic antibiotics" = list("Antibiotics (< 6-8w):yes" = ~ n_perc0(.data$Antibiotics...6.8w. == "yes")),
   "Smoking" = list("Smoking:ex-smoker" = ~ n_perc0(.data$Smoking %in% c("Ex-smoker", "ex smoker")),
                    "Smoking:non-smoker" = ~ n_perc0(.data$Smoking %in% c("never smoked", "Non-smoker")),
                    "Smoking:smoker" = ~ n_perc0(.data$Smoking %in% c("smoker", "Smoker"))),
