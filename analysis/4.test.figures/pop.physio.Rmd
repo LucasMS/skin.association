@@ -268,7 +268,7 @@ g1.1 <- asvs.per.site %>%
   geom_tile(aes(fill = n)) +
   ggpubr::rotate_x_text() +
   facet_grid(cols = vars(Microenvironment), scales = "free", space = "free") +
-  labs (fill = "ASVs (n)", y = "Factor") +
+  labs (fill = "Diversity\n(n of ASVs)", y = "Factor") +
   theme(legend.position = "bottom") +
   scale_fill_continuous(breaks=seq(0,30,by= 5))
 g1.1
@@ -284,30 +284,42 @@ asvs.per.site %>%
 
 ```{r, warning=F}
 top.associations <- to.plot %>% 
-  mutate(presence = 1) %>% 
+  # Get cumulated relative abundance of affected avs in each site 
+  ungroup() %>% 
+  select(-Group, -Description, -value, -se) %>% 
+  unique() %>% 
   group_by(Genus, Family, Phylum, Site) %>% 
-  summarise(sum = sum(presence)) %>%
+  summarise(sum = sum(rel.abundance), n = n()) %>%
+  # Get average by microenvironment
   mutate(weights = if_else(Site %in% c("Volar forearm",
                                        "Dorsal forearm"),
                            0.5,
                            1)) %>% 
   group_by(Genus, Family, Phylum) %>% 
   #get averages
-  summarise(avg.per.microenvironemt = weighted.mean(sum, weights), sd.per.microenvironemt = sqrt(wtd.var(sum, weights))) %>% 
-  arrange(desc(avg.per.microenvironemt)) %>% 
+  summarise(avg.abund = weighted.mean(sum, weights, na.rm = T), sd.abund = sqrt(wtd.var(sum, weights, na.rm = T)),
+            avg.n = weighted.mean(n, weights, na.rm = T), sd.n = sqrt(wtd.var(n, weights, na.rm = T))) %>% 
+  arrange(desc(avg.abund)) %>% 
   ungroup() %>%
-  top_n(n = 10, wt = avg.per.microenvironemt) %>% 
+  top_n(n = 10, wt = avg.abund) %>% 
   mutate(Genus = factor(Genus, levels=unique(Genus))) 
 
-g2 <- ggplot(top.associations, aes(x = Genus, y = avg.per.microenvironemt, fill = Phylum)) +
-  geom_col() +
+
+g2 <- ggplot(top.associations, aes(x = avg.abund, y = avg.n, label = Genus)) +
+  geom_errorbar(aes(xmin=avg.abund-sd.abund, xmax=avg.abund+sd.abund), width=0,
+                position=position_dodge(.9), alpha = 0.3) +
+  geom_errorbar(aes(ymin=avg.n-sd.n, ymax=avg.n+sd.n), width=0,
+                position=position_dodge(.9), alpha = 0.3) +
+  geom_point(aes(color = Phylum), size = 3) +
+  scale_x_log10() +
+  scale_y_log10() +
   scale_fill_brewer(palette = "Dark2") +
-  ggpubr::rotate_x_text()+
-  labs(y = "ASVs/\nmicroen.") +
+  labs(x = "Total abundance (%)" , y = "Diversity (n of ASVs)") +
+  ggrepel::geom_text_repel() +
   theme(legend.position = "bottom") +
-  geom_errorbar(aes(ymin=avg.per.microenvironemt-sd.per.microenvironemt, ymax=avg.per.microenvironemt+sd.per.microenvironemt), width=.2,
-                position=position_dodge(.9)) +
-  guides(fill=guide_legend(ncol=2))
+  guides (color = guide_legend(ncol=2))  +
+  scale_colour_brewer(palette = "Dark2")
+
 
 g2
 top.associations
