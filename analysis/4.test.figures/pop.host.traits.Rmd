@@ -45,7 +45,7 @@ library("BiocStyle")
 library("ggthemes") # add ggplot2 themes
 library("ggplot2")
 original <- theme_get()
-theme_set(theme_few(base_size = 14))
+theme_set(theme_few(base_size = 16))
 
 # Set seed for reproducibility
 set.seed(13)
@@ -442,7 +442,7 @@ g3.1 <- ggplot(this.plot,
         axis.line = element_line(colour = "darkgrey"),
         panel.grid.major = element_blank(),
         panel.grid.major.y =  element_line(colour = "lightgray", linetype = 3),
-        text = element_text(size = 14),
+        text = element_text(size = 18),
         panel.border = element_rect(colour = "darkgray", fill=NA)) +
   guides(size = guide_legend(ncol = 1), color = FALSE) +
   scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 10)) +
@@ -479,7 +479,7 @@ g3.2 <- ggplot(this.plot,
         axis.line = element_line(colour = "darkgrey"),
         panel.grid.major = element_blank(),
         panel.grid.major.y =  element_line(colour = "lightgray", linetype = 3),
-        text = element_text(size = 14),
+        text = element_text(size = 18),
         panel.border = element_rect(colour = "darkgray", fill=NA)) +
   guides(size = guide_legend(ncol = 1), color = FALSE) +
   scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 1)) +
@@ -534,7 +534,7 @@ g3.3 <- ggplot(this.plot,
         axis.line = element_line(colour = "darkgrey"),
         panel.grid.major = element_blank(),
         panel.grid.major.y =  element_line(colour = "lightgray", linetype = 3),
-        text = element_text(size = 14),
+        text = element_text(size = 18),
         panel.border = element_rect(colour = "darkgray", fill=NA)) +
   guides(size = guide_legend(ncol = 1), color = FALSE) +
   scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 5)) +

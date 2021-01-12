@@ -45,7 +45,7 @@ library("rmarkdown")
 library("BiocStyle")
 library("ggthemes") # add ggplot2 themes
 library("ggplot2")
-#theme_set(theme_few(base_size = 14))
+#theme_set(theme_few(base_size = 16))
 
 # Set seed for reproducibility
 set.seed(13)
@@ -265,7 +265,7 @@ g3.1 <- ggplot(this.plot,
         axis.line = element_line(colour = "darkgrey"),
         panel.grid.major = element_blank(),
         panel.grid.major.y =  element_line(colour = "lightgray", linetype = 3),
-        text = element_text(size = 14),
+        text = element_text(size = 18),
         panel.border = element_rect(colour = "darkgray", fill=NA),
         strip.text.y.right = element_text(angle = 0)) +
   guides(size = guide_legend(ncol = 1), color = FALSE) +
@@ -303,7 +303,7 @@ g3.2 <- ggplot(this.plot,
         axis.line = element_line(colour = "darkgrey"),
         panel.grid.major = element_blank(),
         panel.grid.major.y =  element_line(colour = "lightgray", linetype = 3),
-        text = element_text(size = 14),
+        text = element_text(size = 18),
         panel.border = element_rect(colour = "darkgray", fill=NA),
         strip.text.y.right = element_text(angle = 0)) +
   guides(size = guide_legend(ncol = 1), color = FALSE) +
@@ -356,7 +356,7 @@ g3.3 <- ggplot(this.plot,
         axis.line = element_line(colour = "darkgrey"),
         panel.grid.major = element_blank(),
         panel.grid.major.y =  element_line(colour = "lightgray", linetype = 3),
-        text = element_text(size = 14),
+        text = element_text(size = 18),
         panel.border = element_rect(colour = "darkgray", fill=NA),
         strip.text.y.right = element_text(angle = 0)) +
   guides(size = guide_legend(ncol = 1), color = FALSE) +
