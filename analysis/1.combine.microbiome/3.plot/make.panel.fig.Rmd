@@ -48,7 +48,7 @@ library("rmarkdown")
 library("BiocStyle")
 library("ggthemes") # add ggplot2 themes
 library("ggplot2")
-theme_set(theme_few(base_size = 10))
+theme_set(theme_few(base_size = 14))
 
 # Set seed for reproducibility
 set.seed(13)
@@ -104,6 +104,13 @@ div.folder <- "~/IKMB/projects/skin.associations/results/analysis/1.combine.micr
 beta <- "to.plot.beta.rds" %>% 
   paste0(div.folder, "/", .) %>% 
   readRDS(.)
+
+var.explained <- "pcoa.data.rds" %>% 
+  paste0(div.folder, "/", .) %>% 
+  readRDS(.) %>% 
+  pull(Relative_eig) %>% 
+  `*` (100)
+
 
 microenv <- "~/IKMB/projects/skin.associations/scripts/data.dic/skin.microenv.tsv" %>% 
   read_tsv()
@@ -216,27 +223,34 @@ g.tax <- comb %>%
   mutate(Site = if_else(Site == "Behind ear",
                         "Retroauricular fold",
                         Site)) %>% 
-  #mutate(Site = paste0(Site, " (", str_sub(Cohort, 1,1), ")")) %>% 
-  mutate(Site = factor(Site, levels = c("Dorsal forearm",
-                                        "Volar forearm",
-                                        "Antecubital fossa (P)",
-                                        "Antecubital fossa (K)",
+  mutate(Site = Site %>%
+           gsub("Dorsal", "D.",.) %>% 
+           gsub("Antecubital", "A.",.) %>% 
+           gsub("Volar", "V.",.) %>% 
+           gsub("Retroauricular", "R.",.)) %>% 
+  mutate(Site = factor(Site, levels = c("D. forearm",
+                                        "V. forearm",
+                                        "A. fossa (P)",
+                                        "A. fossa (K)",
                                         "Forehead",
-                                        "Retroauricular fold"))) %>% 
+                                        "R. fold"))) %>% 
   mutate(Site = fct_rev(Site)) %>% 
+  mutate(Microenvironment = if_else(Microenvironment == "Sebaceous",
+                                    "Seb.",
+                                    Microenvironment)) %>% 
   ggplot(aes(x = Site, y = percentage, fill = Genus)) +
   geom_bar(stat = "identity") +
   scale_fill_manual(values = getPalette(colourCount)) +
   facet_grid(rows = vars(Microenvironment), scales = "free_y") +
-  #ggpubr::rotate_x_text() +
   labs(y = "Abundance (%)") +
   guides(fill=guide_legend(ncol=1)) +
-  theme(legend.position = "bottom"#,
-        #axis.text.x = element_blank(), 
-        #axis.ticks.x = element_blank()
-        ) +
+  theme(legend.position = "right",
+        text = element_text(size = 20),
+        legend.text = element_text(size = 18),
+        axis.text = element_text(size = 20),
+        axis.text.y.right = element_text(size = 18)) +
   coord_flip() +
-  guides(fill=guide_legend(ncol=3))
+  guides(fill = guide_legend(ncol = 1))
 
 g.tax
 ```
@@ -247,50 +261,59 @@ g.tax
 # Beta
 
 ```{r}
-g.mds <- beta %>% 
+library(ggpubr)
+g.pcoa <- beta %>% 
   #add new naming
   left_join(microenv, by = "Site") %>% 
   mutate(Site = if_else(Site == "Behind ear",
                         "Retroauricular fold",
                         Site)) %>% 
   #mutate(Site = paste0(Site, " (", str_sub(Cohort, 1,1), ")")) %>% 
-  mutate(Site = factor(Site, levels = c("Dorsal forearm",
-                                        "Volar forearm",
-                                        "Antecubital fossa (P)",
-                                        "Antecubital fossa (K)",
+  mutate(Site = Site %>%
+           gsub("Dorsal", "D.",.) %>% 
+           gsub("Antecubital", "A.",.) %>% 
+           gsub("Volar", "V.",.) %>% 
+           gsub("Retroauricular", "R.",.)) %>% 
+  mutate(Site = factor(Site, levels = c("D. forearm",
+                                        "V. forearm",
+                                        "A. fossa (P)",
+                                        "A. fossa (K)",
                                         "Forehead",
-                                        "Retroauricular fold"))) %>% 
-  ggpubr::ggscatterhist(.,
-  x = "MDS1", y = "MDS2",
-  color = "Site",
-  alpha = 0.9, # comment out this and last line to remove the split by species
-  #margin.plot = "histogram", # I'd suggest removing this line to get density plots
-  margin.params = list(fill = "Site", color = "darkgrey", size = 0.2),
-  margin.plot = "boxplot",
-  ggtheme = theme_few(),
-  legend = "bottom",
-  palette = cbp1)
-g.mds 
+                                        "R. fold"))) %>% 
+  ggplot(aes(x = Axis.1, y = Axis.2, group = factor(Site))) +
+  geom_point(aes(color = Site, fill = Site)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 20),
+        legend.text = element_text(size = 18),
+        axis.text = element_text(size = 20),
+        legend.margin=margin(-1,0,-1,0),
+        legend.box.margin=margin(-1,0,-1,0)) +
+  labs(x= paste0("Axis 1 (", var.explained[1] %>% round(2), "%)"),
+       y =  paste0("Axis 2 (", var.explained[2] %>% round(2), "%)"))
+
+g.pcoa <- ggExtra::ggMarginal(g.pcoa, type="boxplot", groupFill = TRUE,groupColour = T) 
 
 ```
 
 
 # Add Roc plot
 ```{r}
-g.roc
+g.roc <- g.roc + theme(text = element_text(size = 20),
+                       legend.text = element_text(size = 18),
+                       axis.text = element_text(size = 20))
 ```
 
 
 # Combine the plots
 
-```{r, fig.height=6, fig.width=18}
+```{r, fig.height=11.5, fig.width=12.5}
 
-ggpubr::ggarrange(g.tax,
-                  g.roc,
-                  g.mds,
-                  ncol = 3,
-                  labels = "AUTO",
-                  widths = c(1,1,1))
+ga <- ggarrange(patchwork::plot_spacer(), g.tax, labels = c("A", ""), widths = c(1,5), font.label = list(size = 20 ))
+gb <- ggarrange(g.roc, g.pcoa, labels = c("B", "C"), widths = c(0.9,1), font.label = list(size = 20 ))
+ggpubr::ggarrange(ga,
+                  gb,
+                  nrow = 2,
+                  labels = c("", ""), heights = c(1.05, 1))
 ```
 
 

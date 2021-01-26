@@ -107,9 +107,10 @@ selected <- NULL
 for (i in files){
   # get results
   final.res.internal <- readRDS(i) %>%
-    .[["global.res"]]
+    .[["global.res"]] %>% 
+    data.frame()
   # Add them all to final results
-  final.res <- bind_rows(final.res.internal, final.res)
+  final.res <- rbind(final.res.internal, final.res)
   # clean internal files
   rm(final.res.internal)
   
@@ -228,7 +229,7 @@ plot.roc.curves <- function(){
     geom_abline(intercept = 0) +
     annotation_custom(tableGrob(annotation,
                                 rows=NULL,
-                                theme=ttheme_minimal(base_size = 10)),
+                                theme=ttheme_minimal(base_size = 18)),
                       xmin=0.5,
                       xmax=1,
                       ymin=0,
