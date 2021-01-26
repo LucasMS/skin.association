@@ -65,6 +65,8 @@ library(ggplot2)
 library(tidyverse)
 library(vegan)
 library(reshape2)
+library(ape)
+library(RColorBrewer)
 ```
 
 ## Import data
@@ -91,8 +93,78 @@ meta <- "meta.rds" %>%
 micro.r <- "micro.r.rds" %>% 
   paste0(d.in.diversity, "/", .) %>% 
   readRDS()
+
+micro <- "micro.rds" %>% 
+  paste0(d.in.diversity, "/", .) %>% 
+  readRDS()
+
+# Retrieve sequencing runs
+
+pop.run <- "/home/lsilva/IKMB/projects/skin.associations/popgen/metadata/runs.files/runs.files.tsv" %>% 
+  read.delim(header = T) # Includes popgen and and some kora ff4
+
+kora.run <- readRDS("/home/lsilva/IKMB/projects/skin.associations/kora/results/2.combine.metadata.microbiome/all.meta.rds") %>% 
+  select(NGS_ID, run) %>% 
+  rename("kora.run" = "run")
 ```
 
+
+# Function
+
+Add quickRareCurve from Dave Clark @ https://dave-clark.github.io/post/speeding-up-rarefaction-curves-for-microbial-community-ecology/
+```{r}
+quickRareCurve <- function (x, step = 1, sample, xlab = "Sample Size",
+                            ylab = "Species", label = TRUE, col, lty, max.cores = T, nCores = 1, ...)
+{
+  require(parallel)
+  x <- as.matrix(x)
+  if (!identical(all.equal(x, round(x)), TRUE))
+    stop("function accepts only integers (counts)")
+  if (missing(col))
+    col <- par("col")
+  if (missing(lty))
+    lty <- par("lty")
+  tot <- rowSums(x) # calculates library sizes
+  S <- specnumber(x) # calculates n species for each sample
+  if (any(S <= 0)) {
+    message("empty rows removed")
+    x <- x[S > 0, , drop = FALSE]
+    tot <- tot[S > 0]
+    S <- S[S > 0]
+  } # removes any empty rows
+  nr <- nrow(x) # number of samples
+  col <- rep(col, length.out = nr)
+  lty <- rep(lty, length.out = nr)
+  # parallel mclapply
+  # set number of cores
+  mc <- getOption("mc.cores", ifelse(max.cores, detectCores(), nCores))
+  message(paste("Using ", mc, " cores"))
+  out <- mclapply(seq_len(nr), mc.cores = mc, function(i) {
+    n <- seq(1, tot[i], by = step)
+    if (n[length(n)] != tot[i])
+      n <- c(n, tot[i])
+    drop(rarefy(x[i, ], n))
+  })
+  Nmax <- sapply(out, function(x) max(attr(x, "Subsample")))
+  Smax <- sapply(out, max)
+  plot(c(1, max(Nmax)), c(1, max(Smax)), xlab = xlab, ylab = ylab,
+       type = "n", ...)
+  if (!missing(sample)) {
+    abline(v = sample)
+    rare <- sapply(out, function(z) approx(x = attr(z, "Subsample"),
+                                           y = z, xout = sample, rule = 1)$y)
+    abline(h = rare, lwd = 0.5)
+  }
+  for (ln in seq_along(out)) {
+    N <- attr(out[[ln]], "Subsample")
+    lines(N, out[[ln]], col = col[ln], lty = lty[ln], ...)
+  }
+  if (label) {
+    ordilabel(cbind(tot, S), labels = rownames(x), ...)
+  }
+  invisible(out)
+}
+```
 
 # Get distances
 
@@ -105,16 +177,18 @@ micro.dis <- micro.r %>%
 
 Let's have a look at the beta diversity
 
-## Calculate mds
+## Calculate pcoa
 ```{r}
-mds <- micro.dis %>% 
-  metaMDS(.,autotransform = F, trymax = 50)
+pcoa <- micro.dis %>% 
+  pcoa()
+pcoa$values[1:5,]
+biplot.pcoa(pcoa)
 ```
 
 ## Visualize distance of samples
 ```{r}
 
-to.plot.beta <- mds$points %>%
+to.plot.beta <- pcoa$vectors[,1:2] %>%
   data.frame() %>% 
   rownames_to_column("NGS_ID") %>% 
   left_join(meta) %>%
@@ -129,7 +203,7 @@ ggpubr::ggscatterhist(
                                           "Antecubital fossa (K)",
                                           "Forehead",
                                           "Retroauricular fold"))),
-  x = "MDS1", y = "MDS2",
+  x = "Axis.1", y = "Axis.2",
   color = "Site",
   alpha = 0.4,
   margin.params = list(fill = "Site", color = "darkgrey", size = 0.2),
@@ -146,7 +220,146 @@ ggpubr::ggscatterhist(
   paste0(d.out, "/", .) %>% 
   saveRDS(to.plot.beta, .)
 
+"pcoa.data.rds" %>%  
+  paste0(d.out, "/", .) %>% 
+  saveRDS(pcoa$values, .)
+
 ```
+
+# Plot sequencing runs
+
+## Edit information
+```{r}
+# set colnames
+pop.run <- pop.run %>% 
+  rownames_to_column("V1") %>% 
+  select(V1) %>% 
+  separate(V1,into = c("pop.run", "garbage","NGS_ID"), sep = "/|:") %>% 
+  filter(NGS_ID != "input") %>% 
+  select(-garbage) %>% 
+  select(pop.run, NGS_ID) %>% 
+  #Remove repeated run
+  filter(pop.run != "H19847") # It repeats with H19847A. It is basically similar info, but Malte repeated H19847, making H19847A because he could not access some info in the original folder. 
+```
+
+## Plot
+
+```{r}
+to.plot.beta <- to.plot.beta %>% 
+  #add pop.run
+  left_join(pop.run, by = "NGS_ID") %>% 
+  # add kora.run
+  left_join(kora.run, by = "NGS_ID") %>% 
+  # unify runs
+  mutate(Run = case_when(Cohort == "PopGen" ~ pop.run,
+                         Cohort == "KORA FF4" ~ kora.run)) %>% 
+  #code runs
+  ungroup() %>% 
+  mutate(run.id = Run %>%
+           factor() %>% 
+           as.numeric %>% 
+           as.character() %>% 
+           str_pad(2, "left", pad = "0"))
+
+ncol <- to.plot.beta$Run %>% unique() %>% length()
+mycolors <- colorRampPalette(brewer.pal(8, "Paired"))(ncol)
+
+batch.plot <- ggplot(to.plot.beta, aes(x = Axis.1, y = Axis.2, group = run.id)) +
+  geom_point(aes(col = run.id), alpha = 0.7) +
+  facet_wrap(~ Cohort + Site, scales = "free") +
+  stat_ellipse(aes(col = run.id)) +
+  labs(color = "Sequencing run",
+       x = paste0("Axis 1 (", 
+                  pcoa$values$Relative_eig[1] %>% 
+                    `*`(100) %>% 
+                    round(2),
+                  "%)"),
+       y = paste0("Axis 2 (", 
+                  pcoa$values$Relative_eig[2] %>% 
+                    `*`(100) %>% 
+                    round(2),
+                  "%)")) +
+  theme(legend.position = "bottom") +
+  scale_color_manual(values = mycolors) +
+  guides(color=guide_legend(ncol=11))
+```
+
+
+## Summarize
+
+```{r}
+to.plot.beta %>% select(Cohort, run.id) %>% 
+  unique() %>% 
+  group_by(Cohort) %>% 
+  summarize(n = n())
+
+
+to.plot.beta %>% select(Cohort, run.id, Site) %>% 
+  unique() %>% 
+  View()
+```
+
+
+# Get number of sequences per run
+
+```{r}
+sequences.plot <- micro %>% rowSums() %>% 
+  data.frame(NGS_ID = names(.), total.seqs = .) %>% 
+  left_join(to.plot.beta %>% 
+              select(NGS_ID, run.id, Site, Cohort) %>% 
+              unique(), by = "NGS_ID") %>% 
+  ggplot(aes(y = total.seqs, x = run.id)) +
+  geom_boxplot(aes(color = run.id)) +
+  geom_jitter(aes(color = run.id), alpha = 0.3, size = 0.4)+
+  scale_color_manual(values = mycolors) +
+  labs(x = "Sequencing Run", y = "Total sequences") +
+  theme(legend.position = "none") +
+  ggpubr::rotate_x_text() +
+  scale_y_log10()
+sequences.plot
+```
+
+# Get rarefaction curves
+
+
+```{r}
+
+curves <- quickRareCurve(micro[,], step = 100, max.cores = F, nCores = 6 ) 
+names(curves) <- rownames(micro[,])
+
+
+to.plot <- NULL
+for (i in names(curves)){
+  subsample <- curves[[i]]
+  df <- data.frame(ASV = subsample %>% as.numeric, 
+                   index = subsample %>% 
+                     names() %>% 
+                     gsub("N", "",.) %>% as.numeric(), NGS_ID = i)
+  to.plot <- bind_rows(to.plot, df)
+}
+
+to.plot <- to.plot %>% 
+  left_join(to.plot.beta %>% 
+              select(NGS_ID, run.id, Site, Cohort) %>% 
+              unique(), by = "NGS_ID")
+
+
+rarecurve <- ggplot(to.plot %>%  filter(index < 10000) , aes(index, ASV, group = NGS_ID)) +
+  geom_line(alpha = 0.1) +
+  geom_vline(xintercept = 5000, linetype = 2) +
+  facet_wrap(~ Site) +
+  theme(legend.position = "none") +
+  labs(x = "Sample size")
+```
+
+# Make final plot
+
+```{r, fig.height=10, fig.width=10}
+
+gbc <- ggpubr::ggarrange(sequences.plot, rarecurve, labels = c("A", "B"), widths = c(1,2))
+ggpubr::ggarrange(gbc, batch.plot , labels = c("", "C"), nrow =2, heights = c(1,1.7))
+```
+
 
 
 # Session information
