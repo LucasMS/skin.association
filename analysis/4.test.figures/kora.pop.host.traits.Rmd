@@ -99,6 +99,15 @@ pal <- c("#E69F00", "#56B4E9", "#009E73",
          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")[c(3,4)]
 ```
 
+#Function
+```{r}
+lseq <- function(from=1, to=100000, length.out=6) {
+  # logarithmic spaced sequence
+  # origin from library("emdbook"), because need only this
+  exp(seq(log(from), log(to), length.out = length.out))
+}
+```
+
 # Process ASV
 
 ```{r}
@@ -206,16 +215,14 @@ to.plot %>% mutate(plus = if_else(value > 0,
 
 
 # Plot
-```{r, fig.height= 18, fig.width= 14}
+```{r, fig.height= 18, fig.width= 13}
 to.plot.selected <- to.plot %>%
   mutate(Description = if_else(Description == "Sex",
                                "Sex (m:f)",
                                Description)) %>% 
   mutate(Species = if_else(str_detect(Species, " $"),
                            "Unclassified",
-                           Species)) %>%
-  mutate(Site = factor(Site, levels = c("Antecubital fossa (K)" ,
-                                        "Antecubital fossa (P)")))
+                           Species))
 
 
 # get asv codes per species
@@ -231,8 +238,10 @@ asv = to.plot.selected %>%
   select(ASV, ASV.code)
 
 # add to the df
-to.plot.selected <- left_join(to.plot.selected, asv, by = "ASV")
-
+to.plot.selected <- left_join(to.plot.selected, asv, by = "ASV") %>% 
+  mutate(Site = gsub("Antecubital", "A.", Site)) %>% 
+  mutate(Site = factor(Site, levels = c("A. fossa (K)" ,
+                                        "A. fossa (P)")))
 
 
 
@@ -260,16 +269,17 @@ g3.1 <- ggplot(this.plot,
                   size = rel.abundance,
                   shape = Site), alpha = 0.8, width = 0, height = 0.05) +
   facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
-  labs(size = "Abun. (%)", x = "Effect size (Log2FC)", y  = "Species") +
+  labs(size = "Abun. (%)", x = bquote("Effect size"~(log[2]~"fold change")), y  = "Bacterial species") +
   theme(panel.background = element_blank(),
         axis.line = element_line(colour = "darkgrey"),
         panel.grid.major = element_blank(),
         panel.grid.major.y =  element_line(colour = "lightgray", linetype = 3),
         text = element_text(size = 18),
         panel.border = element_rect(colour = "darkgray", fill=NA),
-        strip.text.y.right = element_text(angle = 0)) +
-  guides(size = guide_legend(ncol = 1), color = FALSE) +
-  scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 5)) +
+        strip.text.y.right = element_text(angle = 0),
+        legend.key=element_blank()) +
+  guides(size = guide_legend(ncol = 1), color = FALSE, shape = guide_legend(override.aes = list(size = 5))) +
+  scale_size_continuous(breaks=lseq(0.1,round(max(this.plot$rel.abundance),0)) %>% round(1)) +
   ggpubr::rotate_x_text(angle = 45) +
   scale_colour_brewer(palette = "Dark2")
 
@@ -298,16 +308,17 @@ g3.2 <- ggplot(this.plot,
                   size = rel.abundance,
                   shape = Site), alpha = 0.8, width = 0, height = 0.05) +
   facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
-  labs(size = "Abun. (%)", x = "Effect size (Log2FC)", y  = "Species") +
+  labs(size = "Abun. (%)", x = bquote("Effect size"~(log[2]~"fold change")), y  = "Bacterial species") +
   theme(panel.background = element_blank(),
         axis.line = element_line(colour = "darkgrey"),
         panel.grid.major = element_blank(),
         panel.grid.major.y =  element_line(colour = "lightgray", linetype = 3),
         text = element_text(size = 18),
         panel.border = element_rect(colour = "darkgray", fill=NA),
-        strip.text.y.right = element_text(angle = 0)) +
-  guides(size = guide_legend(ncol = 1), color = FALSE) +
-  scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 3)) +
+        strip.text.y.right = element_text(angle = 0),
+        legend.key=element_blank()) +
+  guides(size = guide_legend(ncol = 1), color = FALSE, shape = guide_legend(override.aes = list(size = 5))) +
+  scale_size_continuous(breaks=lseq(0.1,round(max(this.plot$rel.abundance),0)) %>% round(1)) +
   ggpubr::rotate_x_text(angle = 45) +
   scale_colour_brewer(palette = "Dark2")
 
@@ -329,6 +340,9 @@ this.plot <-   to.plot.selected %>%
                                Description)) %>% 
   mutate(Description = if_else(Description == "Smoking",
                                "Smoking\n(smoker:non-)",
+                               Description)) %>% 
+   mutate(Description = if_else(Description == "Antibiotics (<6-8w)",
+                               "Antibiotics\n(<6-8w)",
                                Description))
 
 labels = this.plot$ASV
@@ -351,21 +365,22 @@ g3.3 <- ggplot(this.plot,
                   size = rel.abundance,
                   shape = Site), alpha = 0.8, width = 0, height = 0.05) +
   facet_grid(cols = vars(Description),rows = vars(Genus), scales = "free", space = "free_y") +
-  labs(size = "Abun. (%)", x = "Effect size (Log2FC)", y  = "Species") +
+  labs(size = "Abun. (%)", x = bquote("Effect size"~(log[2]~"fold change")), y  = "Bacterial species") +
   theme(panel.background = element_blank(),
         axis.line = element_line(colour = "darkgrey"),
         panel.grid.major = element_blank(),
         panel.grid.major.y =  element_line(colour = "lightgray", linetype = 3),
         text = element_text(size = 18),
         panel.border = element_rect(colour = "darkgray", fill=NA),
-        strip.text.y.right = element_text(angle = 0)) +
-  guides(size = guide_legend(ncol = 1), color = FALSE) +
-  scale_size_continuous(breaks=seq(0,max(this.plot$rel.abundance),by= 1)) +
+        strip.text.y.right = element_text(angle = 0),
+        legend.key=element_blank()) +
+  guides(size = guide_legend(ncol = 1), color = FALSE, shape = guide_legend(override.aes = list(size = 5))) +
+  scale_size_continuous(breaks=lseq(0.1,round(max(this.plot$rel.abundance),0)) %>% round(1)) +
   ggpubr::rotate_x_text(angle = 45) +
   scale_colour_brewer(palette = "Dark2")
 
 
-ggpubr::ggarrange(g3.1, g3.2, g3.3, labels = "AUTO", nrow = 3, heights = c(10, 8,6.5))
+ggpubr::ggarrange(g3.1, g3.2, g3.3, labels = "AUTO", nrow = 3, heights = c(10, 7.5,7))
 
 ```
 

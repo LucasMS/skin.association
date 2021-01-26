@@ -106,7 +106,7 @@ beta.micro.env <- "~/IKMB/projects/skin.associations/results/kora/2.host.trait.s
 # Set variables
 ```{r}
 pal <- c("#E69F00", "#56B4E9", "#009E73",
-          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")[c(2,5,1,6,7,8)][c(4,6)]
+         "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")[c(2,5,1,6,7,8)][c(4,6)]
 
 sites <- deseq %>% 
   select(Site, Cohort) %>% 
@@ -136,16 +136,19 @@ beta.micro.env <- beta.micro.env %>%
             n.rep = n(),
             n.avg = mean(n),
             n.sd = sd(n)) %>% 
-  filter(term == "Microenvironment")
+  filter(term == "Microenvironment") %>% 
+  ungroup() %>% 
+  mutate(term = gsub("Microenvironment", "Micro-\nenvironment", term))
 
-g.micro.env <- ggplot(beta.micro.env, aes(term, R2.avg)) +
+g.micro.env <- ggplot(beta.micro.env, aes(term, R2.avg*100)) +
   geom_col() +
-  labs(y = "R2", x =  "") +
+  labs(y = "Variation\nexplained (%)", x =  "") +
   coord_flip() + 
-  geom_errorbar(aes(ymin = R2.avg - R2.sd, 
-                    ymax = R2.avg + R2.sd), 
+  geom_errorbar(aes(ymin = R2.avg*100 - R2.sd*100, 
+                    ymax = R2.avg*100 + R2.sd*100), 
                 width=.2,
-                position=position_dodge(.9)) 
+                position=position_dodge(.9)) +
+  theme(axis.text = element_text(size = 16), legend.text = element_text(size = 16))
 g.micro.env
 
 beta.micro.env
@@ -156,20 +159,24 @@ beta.micro.env
 ## Names
 ```{r}
 beta <- beta %>%
-  filter(Sig. == "y")
+  filter(Sig. == "y") %>% 
+  mutate(Site = Site %>%
+           as.character() %>% 
+           gsub("Retroauricular", "R.", .) %>% 
+           gsub("Antecubital", "A.", .)) 
 beta
 ```
 
 ## Plot
 ```{r}
-g1 <- ggplot(beta, aes(x = Description, y = R2, group = Site)) +
+g1 <- ggplot(beta, aes(x = Description, y = R2*100, group = Site)) +
   geom_bar(stat="identity", width=.5, position = "dodge", aes(fill = Site)) +
   coord_flip() +
   scale_fill_manual(values = pal) +
   facet_grid(rows = vars(Group), scales = "free", space = "free") +
-  theme(legend.position = "bottom") +
+  theme(legend.position = "bottom",axis.text = element_text(size = 16), legend.text = element_text(size = 16)) +
   guides(fill=guide_legend(ncol=1))  +
-  labs(x = "Factor", y = "Effect size (R2)")
+  labs(x = "Factor", y = "Variation\nexplained (%)")
 g1  
 ```
 
@@ -269,22 +276,36 @@ unique.associations.site %>%
 # Overview
 
 ```{r, warning=F}
-asvs.per.site <- to.plot %>% 
+asvs.per.site <- to.plot %>%  mutate(Site = Site %>%
+                                       as.character() %>% 
+                                       gsub("Retroauricular", "R.", .) %>% 
+                                       gsub("Antecubital", "A.", .)) %>% 
+  mutate(Group = if_else(Group == "Health parameters",
+                         "Antibiotics",
+                         Group)) %>% 
   mutate(Group = if_else(!Group %in% c("Diet", "Others"),
-                         abbreviate(Group, dot = T),
+                         gsub(" ", "\n", Group),
                          Group)) %>% 
   mutate(Microenvironment = if_else(Microenvironment == "Sebaceous",
                                     "Seb.",
                                     Microenvironment)) %>% 
-  group_by(Description, Site, Group, Microenvironment) %>% count()
+  group_by(Description, Site, Group, Microenvironment) %>%
+  count() %>% 
+  mutate(Description = if_else(Description == "Antibiotics (<6-8w)",
+                               "Antibiotics (<8w)",
+                               Description)) %>% 
+    mutate(Group = if_else(!Group %in%  c("Age/BMI/Sex", "Diet"),
+                               "Others",
+                               Group))
 
 g1.1 <- asvs.per.site %>% 
   ggplot(aes(x = Site, y = Description)) +
   geom_tile(aes(fill = n)) +
   ggpubr::rotate_x_text() +
   facet_grid(cols = vars(Microenvironment), rows = vars(Group), scales = "free", space = "free") +
-  labs (fill = "Diversity\n(n of ASVs)", y = "Factor") +
-  theme(legend.position = "right") +
+  labs (fill = "ASVs (n)", y = "Factor") +
+  theme(legend.position = "right", strip.text.x = element_text(angle = 90, size = 16), panel.spacing = unit(0.0, "lines"), strip.text.y = element_text(angle = 0, size = 16, hjust = 0),
+        axis.text = element_text(size = 16), text = element_text(size = 16)) +
   scale_fill_continuous(breaks=seq(0,30,by= 5))
 g1.1
 
@@ -317,18 +338,20 @@ top.associations <- to.plot %>%
 top.associations[is.na(top.associations)] <-0
 
 g2 <- ggplot(top.associations, aes(x = avg.abund, y = avg.n, label = Genus)) +
-  geom_errorbar(aes(xmin=avg.abund-sd.abund, xmax=avg.abund+sd.abund), width =0,
+  geom_errorbar(aes(xmin=avg.abund-sd.abund, xmax=avg.abund+sd.abund), width=0,
                 position=position_dodge(.9), alpha = 0.3) +
-  geom_errorbar(aes(ymin=avg.n-sd.n, ymax=avg.n+sd.n), width =0,
+  geom_errorbar(aes(ymin=avg.n-sd.n, ymax=avg.n+sd.n), width=0,
                 position=position_dodge(.9), alpha = 0.3) +
   geom_point(aes(color = Phylum), size = 3) +
   scale_x_log10() +
   scale_y_log10() +
   scale_fill_brewer(palette = "Dark2") +
-  labs(x = "Total abundance (%)" , y = "Diversity (n of ASVs)") +
-  ggrepel::geom_text_repel() +
-  theme(legend.position = "bottom") +
-  guides (color = guide_legend(ncol=2))  +
+  labs(x = "Total abundance (%)" , y = "Associated ASVs (n)") +
+  ggrepel::geom_text_repel(size = 6, box.padding = 1) +
+  theme(legend.position = "right",
+        legend.text = element_text(size = 16),
+        text = element_text(size = 16)) +
+  guides (color = guide_legend(ncol=1))  +
   scale_colour_brewer(palette = "Dark2")
 
 
@@ -355,10 +378,11 @@ associations <- to.plot %>%
 ```
 
 # Plot overview
-```{r, fig.width= 16, fig.height=7}
+```{r, fig.width= 9, fig.height=9}
 g1.micro <- ggpubr::ggarrange(g.micro.env, g1, labels = "AUTO", nrow = 2, heights = c(1,3))
-g12 <- ggpubr::ggarrange(g1.micro, g1.1, g2, labels = c("", "C", "D"),  ncol = 3, widths =  c(0.5,0.75,0.75))
+g12 <- ggpubr::ggarrange(g1.micro, g1.1, labels = c("", "C"),  ncol = 2, widths = c(1.5,3))
 g12
+ggpubr::ggarrange(g12, g2, labels = c("", "D"),  nrow = 2, heights = c(1.5,1.2))
 ```
 
 # Session information
